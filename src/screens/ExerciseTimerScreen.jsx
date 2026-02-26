@@ -170,11 +170,32 @@ export default function ExerciseTimerScreen() {
     navigate('/')
   }, [id, isIsometric, isHybrid, timer.currentSet, repSet, completed, totalSets, painLevel, notes, navigate])
 
-  // Handle back navigation
-  const handleBack = useCallback(() => {
+  // Handle back navigation — auto-save partial progress
+  const handleBack = useCallback(async () => {
     wakeLock.release()
+
+    // Calculate how many sets were fully completed
+    let completedSets = 0
+    if (isIsometric || isHybrid) {
+      // During rest, the current set's hold is done, so count it
+      completedSets = timer.state === 'resting'
+        ? timer.currentSet
+        : timer.currentSet - 1
+    } else if (isRepBased) {
+      // repSet is the set you're currently on (1-indexed), so completed = repSet - 1
+      completedSets = repSet - 1
+    }
+
+    if (completedSets > 0) {
+      await logWorkout({
+        date: today(),
+        exerciseId: id,
+        setsCompleted: completedSets,
+      })
+    }
+
     navigate('/')
-  }, [navigate, wakeLock])
+  }, [navigate, wakeLock, isIsometric, isHybrid, isRepBased, timer.state, timer.currentSet, repSet, id])
 
   // --- Not found state ---
   if (!exercise) {
