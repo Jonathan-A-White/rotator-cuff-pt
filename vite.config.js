@@ -3,12 +3,15 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const isAndroidBuild = process.env.BUILD_TARGET === 'android'
+
 export default defineConfig({
-  base: '/rotator-cuff-pt/',
+  base: isAndroidBuild ? './' : '/rotator-cuff-pt/',
   plugins: [
     react(),
     tailwindcss(),
-    VitePWA({
+    // Skip PWA service worker for Android builds — Capacitor provides the native shell
+    !isAndroidBuild && VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icon-192.png', 'icon-512.png'],
       manifest: {
@@ -41,5 +44,5 @@ export default defineConfig({
         ]
       }
     })
-  ]
+  ].filter(Boolean)
 })

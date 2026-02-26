@@ -16,12 +16,48 @@ All data is stored locally on your device (IndexedDB). No server, no tracking, n
 - **Fully offline** after first load
 - **Installable** as a PWA on Android and iOS
 
-## Install as PWA on Android
+## Install as PWA on Android (easiest)
 
 1. Open the app URL in Chrome
 2. Tap the three-dot menu (top right)
 3. Tap "Add to Home screen" or "Install app"
 4. The app will appear on your home screen and run in standalone mode
+
+## Build as a Native Android App (APK)
+
+This project uses [Capacitor](https://capacitorjs.com) to wrap the web app as a native Android APK.
+
+### Prerequisites
+
+- [Android Studio](https://developer.android.com/studio) installed
+- Android SDK with at least one platform (e.g. API 35)
+- `ANDROID_HOME` environment variable set (Android Studio does this automatically)
+
+### Steps
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Build web assets and sync to the Android project
+npm run android:sync
+
+# 3. Open the project in Android Studio
+npm run android:open
+```
+
+In Android Studio:
+- Wait for Gradle sync to finish
+- Connect your Android phone via USB (enable USB debugging in Developer Options)
+- Click **Run ▶** to install and launch on your device
+
+### Or run directly from the command line
+
+```bash
+npm run android:run
+```
+
+This builds, syncs, and launches on a connected device or emulator in one step.
 
 ## Development
 
