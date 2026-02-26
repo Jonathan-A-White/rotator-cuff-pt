@@ -27,6 +27,10 @@ export default function ExerciseTimerScreen() {
 
   const audioInitRef = useRef(false)
   const warningFiredRef = useRef(false)
+  // Tracks whether the current set's hold phase completed (needed to correctly count
+  // sets when autoStartRest=false leaves state as 'idle' after a finished hold)
+  const holdCompletedRef = useRef(false)
+  const prevCurrentSetRef = useRef(1)
 
   const wakeLock = useWakeLock()
 
@@ -63,6 +67,7 @@ export default function ExerciseTimerScreen() {
 
   // --- Timer callbacks ---
   const handleHoldComplete = useCallback(() => {
+    holdCompletedRef.current = true
     if (settings?.timerSound) playCompleteTone()
     if (settings?.timerVibrate && navigator.vibrate) navigator.vibrate(500)
   }, [settings])
@@ -89,6 +94,15 @@ export default function ExerciseTimerScreen() {
     onRestComplete: handleRestComplete,
     onAllComplete: handleAllComplete,
   })
+
+  // Reset holdCompletedRef whenever the set advances (so skipToNextSet doesn't
+  // carry a stale "hold done" flag into the next set)
+  useEffect(() => {
+    if (timer.currentSet !== prevCurrentSetRef.current) {
+      holdCompletedRef.current = false
+      prevCurrentSetRef.current = timer.currentSet
+    }
+  }, [timer.currentSet])
 
   // Warning beeps at 10 seconds remaining during hold
   useEffect(() => {
@@ -128,6 +142,7 @@ export default function ExerciseTimerScreen() {
 
   // Handle start for isometric/hybrid exercises
   const handleStart = useCallback(() => {
+    holdCompletedRef.current = false  // new hold beginning — clear previous state
     ensureAudio()
     wakeLock.request()
     if (settings?.timerSound) playStartTone()
@@ -193,10 +208,10 @@ export default function ExerciseTimerScreen() {
     // Calculate how many sets were fully completed
     let completedSets = 0
     if (isIsometric || isHybrid) {
-      // During rest, the current set's hold is done, so count it
-      completedSets = timer.state === 'resting'
-        ? timer.currentSet
-        : timer.currentSet - 1
+      // Count the current set if its hold is done (resting after it, or hold completed
+      // with manual rest mode leaving state as 'idle'). Don't count if mid-hold.
+      const holdDone = timer.state === 'resting' || holdCompletedRef.current
+      completedSets = holdDone ? timer.currentSet : timer.currentSet - 1
     } else if (isRepBased) {
       // repSet is the set you're currently on (1-indexed), so completed = repSet - 1
       completedSets = repSet - 1

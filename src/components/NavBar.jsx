@@ -53,6 +53,9 @@ export default function NavBar() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Disable nav while an exercise timer is active (prevents untracked navigation away mid-set)
+  const isExerciseActive = /^\/exercise\/[^/]+$/.test(location.pathname);
+
   return (
     <nav
       className="fixed bottom-0 inset-x-0 z-50 bg-white dark:bg-[#2C2C2E] border-t border-gray-200 dark:border-[#3A3A3C] pb-[env(safe-area-inset-bottom)]"
@@ -72,13 +75,16 @@ export default function NavBar() {
               onClick={() => navigate(path)}
               aria-label={label}
               aria-current={isActive ? 'page' : undefined}
+              disabled={isExerciseActive}
               className={`
                 flex flex-col items-center justify-center gap-0.5
                 touch-target min-h-[48px] min-w-[48px] px-2
                 transition-colors duration-150
-                ${isActive
-                  ? 'text-teal dark:text-teal-light'
-                  : 'text-muted dark:text-muted-dark'
+                ${isExerciseActive
+                  ? 'opacity-30 cursor-not-allowed'
+                  : isActive
+                    ? 'text-teal dark:text-teal-light'
+                    : 'text-muted dark:text-muted-dark'
                 }
               `}
             >
