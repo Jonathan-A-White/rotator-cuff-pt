@@ -85,12 +85,17 @@ export default function useTimer({
         // Automatically transition to rest
         startResting();
         rafRef.current = requestAnimationFrame(tick);
-      } else {
-        // Either no more sets after rest, or manual rest mode
-        // Go to idle so user can trigger rest / next action
+      } else if (hasMoreSets) {
+        // Manual rest mode – go to idle so user can trigger rest / next action
         setState('idle');
         stateRef.current = 'idle';
         setTimeRemaining(0);
+      } else {
+        // Final set complete – all done
+        setState('done');
+        stateRef.current = 'done';
+        setTimeRemaining(0);
+        onAllCompleteRef.current?.();
       }
     } else if (currentState === 'resting') {
       // Rest phase complete
