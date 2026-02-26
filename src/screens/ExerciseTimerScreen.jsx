@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { exercises } from '../data/exercises'
-import { getSettings, logWorkout } from '../db'
+import { getSettings, logWorkout, getLogsForDate } from '../db'
 import { today } from '../utils/dateUtils'
 import useTimer from '../hooks/useTimer'
 import useWakeLock from '../hooks/useWakeLock'
@@ -34,6 +34,22 @@ export default function ExerciseTimerScreen() {
   useEffect(() => {
     getSettings().then(setSettings)
   }, [])
+
+  // Initialize starting set from today's already-logged sets for this exercise
+  useEffect(() => {
+    if (!exercise) return
+    getLogsForDate(today()).then((logs) => {
+      const alreadyDone = logs
+        .filter((l) => l.exerciseId === id)
+        .reduce((sum, l) => sum + (l.setsCompleted || 0), 0)
+      if (alreadyDone > 0) {
+        const startSet = Math.min(alreadyDone + 1, totalSets)
+        timer.setInitialSet(startSet)
+        setRepSet(startSet)
+      }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
 
   // Determine exercise type
   const isIsometric = exercise && exercise.holdSeconds && !exercise.reps
