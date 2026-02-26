@@ -7,142 +7,206 @@ import { formatDate } from '../utils/dateUtils'
 export default function ExerciseDetailScreen() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const exercise = exercises.find(e => e.id === id)
+  const exercise = exercises.find((e) => e.id === id)
   const [history, setHistory] = useState([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (exercise) {
-      getLogsForExercise(id, 14).then(setHistory)
+    if (!exercise) {
+      setLoading(false)
+      return
     }
+    getLogsForExercise(id, 14).then((logs) => {
+      setHistory(logs)
+      setLoading(false)
+    })
   }, [id, exercise])
 
   if (!exercise) {
     return (
-      <div className="p-6 text-center">
-        <p className="text-muted dark:text-muted-dark">Exercise not found.</p>
-        <button onClick={() => navigate('/')} className="mt-4 text-teal font-medium">Go Back</button>
+      <div className="page-enter px-4 pt-6 max-w-lg mx-auto text-center">
+        <p className="text-muted dark:text-muted-dark py-12">Exercise not found.</p>
+        <button
+          onClick={() => navigate('/')}
+          className="mt-4 w-full min-h-[48px] rounded-xl bg-teal text-white font-semibold py-3"
+        >
+          Back to Home
+        </button>
       </div>
     )
   }
 
+  // Category pill colors
   const categoryColors = {
-    isometric: 'bg-teal/10 text-teal',
-    isotonic: 'bg-amber/10 text-amber',
+    isometric: 'bg-teal/10 text-teal dark:bg-teal/20 dark:text-teal-light',
+    isotonic: 'bg-amber/10 text-amber dark:bg-amber/20',
     mobility: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
     functional: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
   }
 
-  // Aggregate history by date
+  // Aggregate history by date for the last 7 unique dates
   const historyByDate = {}
-  history.forEach(log => {
-    if (!historyByDate[log.date]) historyByDate[log.date] = 0
-    historyByDate[log.date] += log.setsCompleted || 0
+  history.forEach((log) => {
+    if (!historyByDate[log.date]) historyByDate[log.date] = { sets: 0, pain: null }
+    historyByDate[log.date].sets += log.setsCompleted || 0
+    if (log.painLevel != null) historyByDate[log.date].pain = log.painLevel
   })
   const historyDates = Object.keys(historyByDate).sort().reverse().slice(0, 7)
-  const maxSets = Math.max(...Object.values(historyByDate), exercise.sets)
+  const maxSets = Math.max(...Object.values(historyByDate).map((d) => d.sets), exercise.sets)
 
   return (
     <div className="page-enter px-4 pt-4 pb-24 max-w-lg mx-auto">
-      {/* Header */}
+      {/* Back button + Exercise name + emoji */}
       <div className="flex items-center gap-3 mb-4">
         <button
           onClick={() => navigate(-1)}
-          className="touch-target min-h-[48px] min-w-[48px] flex items-center justify-center rounded-xl text-muted dark:text-muted-dark"
+          aria-label="Back"
+          className="touch-target min-h-[48px] min-w-[48px] flex items-center justify-center -ml-2 text-muted dark:text-muted-dark hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-6 h-6">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="w-6 h-6"
+          >
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
-        <span className="text-3xl">{exercise.emoji}</span>
-        <h1 className="text-xl font-bold dark:text-white flex-1">{exercise.name}</h1>
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="text-3xl shrink-0" aria-hidden="true">{exercise.emoji}</span>
+          <h1 className="text-xl font-bold truncate dark:text-white">{exercise.name}</h1>
+        </div>
       </div>
 
-      {/* Tags */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-teal text-white">
+      {/* Phase / category / frequency tags */}
+      <div className="flex flex-wrap gap-2 mb-5">
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-teal text-white">
           Phase {exercise.phase}
         </span>
-        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${categoryColors[exercise.category] || ''}`}>
+        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${categoryColors[exercise.category] || 'bg-gray-100 text-gray-600'}`}>
           {exercise.category}
         </span>
-        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-          {exercise.frequency}
-        </span>
+        {exercise.frequency && (
+          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+            {exercise.frequency}
+          </span>
+        )}
       </div>
 
-      {/* Description */}
+      {/* Full description */}
       <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-xl p-4 mb-4">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-muted dark:text-muted-dark mb-2">Description</h2>
-        <p className="text-sm leading-relaxed dark:text-white">{exercise.description}</p>
+        <h2 className="text-xs font-bold uppercase tracking-wide text-muted dark:text-muted-dark mb-2">
+          Description
+        </h2>
+        <p className="text-sm leading-relaxed dark:text-white">
+          {exercise.description}
+        </p>
       </div>
 
-      {/* Cues */}
-      <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-xl p-4 mb-4">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-muted dark:text-muted-dark mb-2">Cues</h2>
-        <ul className="space-y-2">
-          {exercise.cues.map((cue, i) => (
-            <li key={i} className="flex items-start gap-2 text-sm dark:text-white">
-              <span className="w-1.5 h-1.5 rounded-full bg-teal mt-1.5 shrink-0" />
-              {cue}
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Effort & Pain */}
-      {(exercise.effortGuidance || exercise.painThreshold) && (
-        <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-xl p-4 mb-4 space-y-3">
-          {exercise.effortGuidance && (
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wide text-muted dark:text-muted-dark mb-1">Effort Guidance</h3>
-              <p className="text-sm text-teal dark:text-teal-light font-medium">{exercise.effortGuidance}</p>
-            </div>
-          )}
-          {exercise.painThreshold && (
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wide text-muted dark:text-muted-dark mb-1">Pain Threshold</h3>
-              <p className="text-sm text-red font-medium">{exercise.painThreshold}</p>
-            </div>
-          )}
+      {/* All cues (bullet list, not collapsible) */}
+      {exercise.cues && exercise.cues.length > 0 && (
+        <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-xl p-4 mb-4">
+          <h2 className="text-xs font-bold uppercase tracking-wide text-muted dark:text-muted-dark mb-2">
+            Cues
+          </h2>
+          <ul className="space-y-2" role="list">
+            {exercise.cues.map((cue, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm leading-relaxed dark:text-white">
+                <span className="w-1.5 h-1.5 rounded-full bg-teal mt-1.5 shrink-0" aria-hidden="true" />
+                <span>{cue}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
-      {/* Video */}
+      {/* Effort guidance section */}
+      {exercise.effortGuidance && (
+        <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-xl p-4 mb-4">
+          <h2 className="text-xs font-bold uppercase tracking-wide text-muted dark:text-muted-dark mb-1">
+            Effort Guidance
+          </h2>
+          <p className="text-sm text-teal dark:text-teal-light font-medium">
+            {exercise.effortGuidance}
+          </p>
+        </div>
+      )}
+
+      {/* Pain threshold section */}
+      {exercise.painThreshold && (
+        <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-xl p-4 mb-4">
+          <h2 className="text-xs font-bold uppercase tracking-wide text-muted dark:text-muted-dark mb-1">
+            Pain Threshold
+          </h2>
+          <p className="text-sm text-red font-medium">
+            {exercise.painThreshold}
+          </p>
+        </div>
+      )}
+
+      {/* Watch Video button */}
       {exercise.videoUrl && (
         <a
           href={exercise.videoUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl bg-red/10 text-red font-medium text-sm touch-target mb-4"
+          className="mb-4 flex items-center justify-center gap-2 w-full min-h-[48px] rounded-xl border border-gray-200 dark:border-[#3A3A3C] bg-white dark:bg-[#2C2C2E] text-sm font-semibold text-red hover:bg-red/5 transition-colors"
         >
           <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-            <path d="M10 15l5.19-3L10 9v6m11.56-7.83c.13.47.22 1.1.28 1.9.07.8.1 1.49.1 2.09L22 12c0 2.19-.16 3.8-.44 4.83-.25.9-.83 1.48-1.73 1.73-.47.13-1.33.22-2.65.28-1.3.07-2.49.1-3.59.1L12 19c-4.19 0-6.8-.16-7.83-.44-.9-.25-1.48-.83-1.73-1.73-.13-.47-.22-1.1-.28-1.9-.07-.8-.1-1.49-.1-2.09L2 12c0-2.19.16-3.8.44-4.83.25-.9.83-1.48 1.73-1.73.47-.13 1.33-.22 2.65-.28 1.3-.07 2.49-.1 3.59-.1L12 5c4.19 0 6.8.16 7.83.44.9.25 1.48.83 1.73 1.73z"/>
+            <path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
           </svg>
           Watch Video
         </a>
       )}
 
-      {/* History */}
+      {/* History section: last 7 days of logs */}
       <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-xl p-4">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-muted dark:text-muted-dark mb-3">Recent History</h2>
-        {historyDates.length === 0 ? (
-          <p className="text-sm text-muted dark:text-muted-dark">No sessions logged yet.</p>
+        <h2 className="text-xs font-bold uppercase tracking-wide text-muted dark:text-muted-dark mb-3">
+          Recent History
+        </h2>
+
+        {loading ? (
+          <div className="flex justify-center py-4">
+            <div className="w-6 h-6 border-2 border-teal border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : historyDates.length === 0 ? (
+          <p className="text-sm text-muted dark:text-muted-dark">
+            No sessions logged yet.
+          </p>
         ) : (
-          <div className="space-y-2">
-            {historyDates.map(date => (
-              <div key={date} className="flex items-center gap-3">
-                <span className="text-xs text-muted dark:text-muted-dark w-20">{formatDate(date)}</span>
-                <div className="flex-1 h-4 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-teal rounded-full transition-all"
-                    style={{ width: `${Math.min(100, (historyByDate[date] / maxSets) * 100)}%` }}
-                  />
+          <div className="space-y-2.5">
+            {historyDates.map((date) => {
+              const { sets, pain } = historyByDate[date]
+              const barWidth = maxSets > 0 ? Math.min(100, (sets / maxSets) * 100) : 0
+              return (
+                <div key={date} className="flex items-center gap-3">
+                  <span className="text-xs text-muted dark:text-muted-dark w-20 shrink-0 tabular-nums">
+                    {formatDate(date)}
+                  </span>
+                  <div className="flex-1 h-4 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-teal dark:bg-teal-light rounded-full transition-all"
+                      style={{ width: `${barWidth}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-medium dark:text-white w-12 text-right tabular-nums">
+                    {sets}/{exercise.sets}
+                  </span>
+                  {pain != null && pain > 0 && (
+                    <span className={`text-xs font-medium w-6 text-right tabular-nums ${
+                      pain <= 3 ? 'text-green-600 dark:text-green-400'
+                        : pain <= 6 ? 'text-amber dark:text-amber'
+                        : 'text-red'
+                    }`}>
+                      {pain}
+                    </span>
+                  )}
                 </div>
-                <span className="text-xs font-medium dark:text-white w-12 text-right">
-                  {historyByDate[date]}/{exercise.sets}
-                </span>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
