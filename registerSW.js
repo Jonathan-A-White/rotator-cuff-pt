@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/rotator-cuff-pt/sw.js', { scope: '/rotator-cuff-pt/' })})}
