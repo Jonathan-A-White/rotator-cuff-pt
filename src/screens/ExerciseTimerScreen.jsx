@@ -13,34 +13,42 @@ import CueList from '../components/CueList'
 export default function ExerciseTimerScreen() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const exercise = exercises.find(e => e.id === id)
+  const exercise = exercises.find((e) => e.id === id)
 
   const [settings, setSettings] = useState(null)
   const [completed, setCompleted] = useState(false)
   const [painLevel, setPainLevel] = useState(0)
   const [notes, setNotes] = useState('')
-  const [repCount, setRepCount] = useState(0)
+
+  // Rep-based state
   const [repSet, setRepSet] = useState(1)
-  const [flash, setFlash] = useState(false)
+  const [repResting, setRepResting] = useState(false)
+  const [repRestRemaining, setRepRestRemaining] = useState(0)
+
   const audioInitRef = useRef(false)
   const warningFiredRef = useRef(false)
 
   const wakeLock = useWakeLock()
 
+  // Load settings on mount
   useEffect(() => {
     getSettings().then(setSettings)
   }, [])
 
+  // Determine exercise type
   const isIsometric = exercise && exercise.holdSeconds && !exercise.reps
-  const isRepBased = exercise && exercise.reps && !exercise.holdSeconds
   // Some exercises like scapular setting have both reps and holdSeconds
   const isHybrid = exercise && exercise.reps && exercise.holdSeconds
+  const isRepBased = exercise && exercise.reps && !exercise.holdSeconds
 
+  const totalSets = exercise?.sets || 1
+  const holdTime = exercise?.holdSeconds || 30
+  const restTime = exercise?.restSeconds || 60
+
+  // --- Timer callbacks ---
   const handleHoldComplete = useCallback(() => {
     if (settings?.timerSound) playCompleteTone()
     if (settings?.timerVibrate && navigator.vibrate) navigator.vibrate(500)
-    setFlash(true)
-    setTimeout(() => setFlash(false), 1500)
   }, [settings])
 
   const handleRestComplete = useCallback(() => {
@@ -55,17 +63,18 @@ export default function ExerciseTimerScreen() {
     setCompleted(true)
   }, [settings, wakeLock])
 
+  // Timer hook for isometric / hybrid exercises
   const timer = useTimer({
-    holdSeconds: exercise?.holdSeconds || 0,
-    restSeconds: exercise?.restSeconds || 0,
-    totalSets: exercise?.sets || 1,
+    holdSeconds: holdTime,
+    restSeconds: restTime,
+    totalSets: totalSets,
     autoStartRest: settings?.restTimerAutoStart ?? true,
     onHoldComplete: handleHoldComplete,
     onRestComplete: handleRestComplete,
     onAllComplete: handleAllComplete,
   })
 
-  // Fire warning beeps at 10 seconds remaining during hold
+  // Warning beeps at 10 seconds remaining during hold
   useEffect(() => {
     if (timer.state === 'holding' && timer.timeRemaining <= 10000 && timer.timeRemaining > 9500 && !warningFiredRef.current) {
       warningFiredRef.current = true
@@ -77,17 +86,40 @@ export default function ExerciseTimerScreen() {
     }
   }, [timer.state, timer.timeRemaining, settings])
 
-  const handleStart = useCallback(() => {
+  // Rep-based rest countdown
+  useEffect(() => {
+    if (!repResting || repRestRemaining <= 0) {
+      if (repResting && repRestRemaining <= 0) {
+        setRepResting(false)
+        if (settings?.timerSound) playRestCompleteTone()
+        if (settings?.timerVibrate && navigator.vibrate) navigator.vibrate([200, 100, 200])
+      }
+      return
+    }
+    const interval = setInterval(() => {
+      setRepRestRemaining((prev) => Math.max(0, prev - 1))
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [repResting, repRestRemaining, settings])
+
+  // Ensure audio context is initialized (requires user gesture)
+  const ensureAudio = useCallback(() => {
     if (!audioInitRef.current) {
       initAudio()
       audioInitRef.current = true
     }
+  }, [])
+
+  // Handle start for isometric/hybrid exercises
+  const handleStart = useCallback(() => {
+    ensureAudio()
     wakeLock.request()
     if (settings?.timerSound) playStartTone()
     if (settings?.timerVibrate && navigator.vibrate) navigator.vibrate(200)
     timer.start()
-  }, [timer, settings, wakeLock])
+  }, [ensureAudio, timer, settings, wakeLock])
 
+  // Handle pause/resume
   const handlePauseResume = useCallback(() => {
     if (timer.isPaused) {
       timer.resume()
@@ -96,203 +128,330 @@ export default function ExerciseTimerScreen() {
     }
   }, [timer])
 
+  // Handle complete set for rep-based exercises
   const handleCompleteRepSet = useCallback(() => {
-    if (!audioInitRef.current) {
-      initAudio()
-      audioInitRef.current = true
-    }
+    ensureAudio()
+    wakeLock.request()
     if (settings?.timerSound) playCompleteTone()
     if (settings?.timerVibrate && navigator.vibrate) navigator.vibrate(300)
-    if (repSet >= (exercise?.sets || 3)) {
-      handleAllComplete()
-    } else {
-      setRepSet(s => s + 1)
-      setRepCount(0)
-    }
-  }, [repSet, exercise, settings, handleAllComplete])
 
-  const handleSave = async () => {
-    const setsCompleted = isRepBased || isHybrid ? repSet : timer.currentSet
+    if (repSet >= totalSets) {
+      // All sets done
+      wakeLock.release()
+      setCompleted(true)
+    } else {
+      // Move to next set with optional rest
+      if (restTime > 0) {
+        setRepResting(true)
+        setRepRestRemaining(restTime)
+      }
+      setRepSet((s) => s + 1)
+    }
+  }, [ensureAudio, repSet, totalSets, restTime, settings, wakeLock])
+
+  // Skip rep rest
+  const handleSkipRepRest = useCallback(() => {
+    setRepResting(false)
+    setRepRestRemaining(0)
+  }, [])
+
+  // Save workout and navigate back
+  const handleSave = useCallback(async () => {
+    const setsCompleted = (isIsometric || isHybrid)
+      ? timer.currentSet
+      : repSet
     await logWorkout({
       date: today(),
       exerciseId: id,
-      setsCompleted: completed ? (exercise?.sets || setsCompleted) : setsCompleted,
+      setsCompleted: completed ? totalSets : setsCompleted,
       painLevel: painLevel || undefined,
-      notes: notes || undefined,
+      notes: notes.trim() || undefined,
     })
     navigate('/')
-  }
+  }, [id, isIsometric, isHybrid, timer.currentSet, repSet, completed, totalSets, painLevel, notes, navigate])
 
+  // Handle back navigation
+  const handleBack = useCallback(() => {
+    wakeLock.release()
+    navigate('/')
+  }, [navigate, wakeLock])
+
+  // --- Not found state ---
   if (!exercise) {
     return (
-      <div className="p-6 text-center">
-        <p className="text-muted dark:text-muted-dark">Exercise not found.</p>
-        <button onClick={() => navigate('/')} className="mt-4 text-teal font-medium">Go Back</button>
+      <div className="page-enter px-4 pt-6 max-w-lg mx-auto text-center">
+        <p className="text-muted dark:text-muted-dark py-12">Exercise not found.</p>
+        <button
+          onClick={() => navigate('/')}
+          className="mt-4 w-full min-h-[48px] rounded-xl bg-teal text-white font-semibold py-3"
+        >
+          Back to Home
+        </button>
       </div>
     )
   }
 
   const totalTime = timer.state === 'resting'
-    ? (exercise.restSeconds || 0) * 1000
-    : (exercise.holdSeconds || 0) * 1000
+    ? restTime * 1000
+    : holdTime * 1000
 
+  // --- Completion screen ---
+  if (completed) {
+    return (
+      <div className="page-enter px-4 pt-6 pb-24 max-w-lg mx-auto space-y-6">
+        {/* Header */}
+        <div className="text-center space-y-2">
+          <span className="text-5xl" role="img" aria-label={exercise.name}>
+            {exercise.emoji}
+          </span>
+          <h1 className="text-xl font-bold dark:text-white">Exercise Complete</h1>
+          <p className="text-muted dark:text-muted-dark text-sm">
+            {exercise.name} &middot; {totalSets}/{totalSets} sets
+          </p>
+        </div>
+
+        {/* Completion check */}
+        <div className="flex justify-center">
+          <div className="w-20 h-20 rounded-full bg-teal/10 dark:bg-teal/20 flex items-center justify-center">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="var(--color-teal)"
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="w-10 h-10"
+            >
+              <polyline points="4 12 10 18 20 6" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Pain slider */}
+        <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-xl p-4">
+          <PainSlider value={painLevel} onChange={setPainLevel} label="Pain during exercise" />
+        </div>
+
+        {/* Notes */}
+        <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-xl p-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Notes (optional)
+          </label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="How did it feel? Any adjustments?"
+            rows={3}
+            className="w-full rounded-lg border border-gray-200 dark:border-[#3A3A3C] bg-gray-50 dark:bg-[#1C1C1E] px-3 py-2 text-sm dark:text-white placeholder:text-muted dark:placeholder:text-muted-dark focus:outline-none focus:ring-2 focus:ring-teal/50 resize-none"
+          />
+        </div>
+
+        {/* Save & Back button */}
+        <button
+          onClick={handleSave}
+          className="w-full min-h-[56px] rounded-xl bg-teal hover:bg-teal-light active:bg-teal/90 text-white font-semibold text-base transition-colors"
+        >
+          Save &amp; Back
+        </button>
+      </div>
+    )
+  }
+
+  // --- Active exercise screen ---
   return (
-    <div className={`page-enter px-4 pt-4 pb-24 max-w-lg mx-auto ${flash ? 'timer-flash' : ''}`}>
-      {/* Header */}
+    <div className="page-enter px-4 pt-4 pb-24 max-w-lg mx-auto">
+      {/* Back button + exercise name + emoji */}
       <div className="flex items-center gap-3 mb-4">
         <button
-          onClick={() => navigate('/')}
-          className="touch-target min-h-[48px] min-w-[48px] flex items-center justify-center rounded-xl text-muted dark:text-muted-dark"
+          onClick={handleBack}
+          aria-label="Back"
+          className="touch-target min-h-[48px] min-w-[48px] flex items-center justify-center -ml-2 text-muted dark:text-muted-dark hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-6 h-6">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="w-6 h-6"
+          >
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </button>
-        <span className="text-2xl">{exercise.emoji}</span>
-        <h1 className="text-lg font-bold dark:text-white flex-1">{exercise.name}</h1>
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="text-2xl shrink-0" aria-hidden="true">{exercise.emoji}</span>
+          <h1 className="text-lg font-bold truncate dark:text-white">{exercise.name}</h1>
+        </div>
       </div>
 
-      {/* Badges */}
-      <div className="flex flex-wrap gap-2 mb-3">
-        {exercise.effortGuidance && (
-          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-teal/10 text-teal dark:text-teal-light">
-            {exercise.effortGuidance}
-          </span>
-        )}
-        {exercise.painThreshold && (
-          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red/10 text-red">
-            {exercise.painThreshold}
-          </span>
-        )}
-      </div>
+      {/* Effort guidance badge + Pain threshold warning */}
+      {(exercise.effortGuidance || exercise.painThreshold) && (
+        <div className="flex flex-wrap gap-2 mb-3">
+          {exercise.effortGuidance && (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-teal/10 text-teal dark:bg-teal/20 dark:text-teal-light">
+              {exercise.effortGuidance}
+            </span>
+          )}
+          {exercise.painThreshold && (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red/10 text-red dark:bg-red/20">
+              {exercise.painThreshold}
+            </span>
+          )}
+        </div>
+      )}
 
-      {/* Cues */}
-      <CueList cues={exercise.cues} defaultOpen={true} />
+      {/* Collapsible CueList */}
+      {exercise.cues && exercise.cues.length > 0 && (
+        <div className="mb-3">
+          <CueList cues={exercise.cues} defaultOpen={false} />
+        </div>
+      )}
 
-      {/* Video link */}
+      {/* YouTube link button */}
       {exercise.videoUrl && (
         <a
           href={exercise.videoUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 text-sm text-teal dark:text-teal-light font-medium mb-4 touch-target"
+          className="mb-4 flex items-center justify-center gap-2 w-full min-h-[48px] rounded-lg border border-gray-200 dark:border-[#3A3A3C] bg-white dark:bg-[#2C2C2E] text-sm font-medium text-muted dark:text-muted-dark hover:text-teal dark:hover:text-teal-light transition-colors"
         >
           <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-            <path d="M10 15l5.19-3L10 9v6m11.56-7.83c.13.47.22 1.1.28 1.9.07.8.1 1.49.1 2.09L22 12c0 2.19-.16 3.8-.44 4.83-.25.9-.83 1.48-1.73 1.73-.47.13-1.33.22-2.65.28-1.3.07-2.49.1-3.59.1L12 19c-4.19 0-6.8-.16-7.83-.44-.9-.25-1.48-.83-1.73-1.73-.13-.47-.22-1.1-.28-1.9-.07-.8-.1-1.49-.1-2.09L2 12c0-2.19.16-3.8.44-4.83.25-.9.83-1.48 1.73-1.73.47-.13 1.33-.22 2.65-.28 1.3-.07 2.49-.1 3.59-.1L12 5c4.19 0 6.8.16 7.83.44.9.25 1.48.83 1.73 1.73z"/>
+            <path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
           </svg>
           Watch Video
         </a>
       )}
 
-      {/* Completion view */}
-      {completed ? (
-        <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-xl p-6 space-y-5">
-          <div className="text-center">
-            <div className="text-4xl mb-2">✅</div>
-            <h2 className="text-xl font-bold dark:text-white">Exercise Complete!</h2>
-            <p className="text-muted dark:text-muted-dark text-sm mt-1">
-              {exercise.sets} sets completed
-            </p>
-          </div>
-
-          <PainSlider value={painLevel} onChange={setPainLevel} label="Pain during exercise" />
-
-          <div>
-            <label className="block text-sm font-medium mb-1 dark:text-white">Notes (optional)</label>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="How did it feel?"
-              rows={2}
-              className="w-full rounded-lg border border-[#E5E5E5] dark:border-[#3A3A3C] bg-white dark:bg-[#1C1C1E] px-3 py-2 text-sm dark:text-white"
-            />
-          </div>
-
-          <button
-            onClick={handleSave}
-            className="w-full py-3.5 rounded-xl bg-teal text-white font-bold text-base touch-target"
-          >
-            Save & Back
-          </button>
-        </div>
-      ) : (isIsometric || isHybrid) ? (
-        /* Isometric / Hybrid Timer */
+      {/* ======= ISOMETRIC / HYBRID TIMER ======= */}
+      {(isIsometric || isHybrid) && (
         <div className="flex flex-col items-center">
+          {/* TimerRing */}
           <TimerRing
             timeRemaining={timer.timeRemaining}
             totalTime={totalTime}
-            size={240}
+            size={220}
             strokeWidth={8}
             state={timer.state}
           />
 
-          <p className="text-sm font-medium text-muted dark:text-muted-dark mt-3 mb-4">
-            Set {timer.currentSet} of {exercise.sets}
+          {/* Set indicator */}
+          <p className="text-sm font-semibold text-muted dark:text-muted-dark mt-3 mb-4">
+            Set {timer.currentSet} of {totalSets}
+            {isHybrid && exercise.reps && (
+              <span className="ml-2 text-teal dark:text-teal-light">
+                &middot; {exercise.reps} reps per set
+              </span>
+            )}
           </p>
 
-          {timer.state === 'idle' ? (
+          {/* Start / Pause button */}
+          {timer.state === 'idle' && (
             <button
               onClick={handleStart}
-              className="w-full py-4 rounded-xl bg-teal text-white font-bold text-lg touch-target"
+              className="w-full min-h-[56px] rounded-xl bg-teal hover:bg-teal-light active:bg-teal/90 text-white font-semibold text-lg transition-colors"
             >
-              {timer.currentSet === 1 ? 'Start' : 'Start Next Set'}
+              {timer.currentSet === 1 ? 'Start' : 'Start Set'}
             </button>
-          ) : (
-            <div className="w-full space-y-3">
+          )}
+
+          {(timer.state === 'holding' || timer.state === 'resting') && (
+            <>
               <button
                 onClick={handlePauseResume}
-                className="w-full py-4 rounded-xl bg-teal text-white font-bold text-lg touch-target"
+                className={`w-full min-h-[56px] rounded-xl font-semibold text-lg transition-colors ${
+                  timer.isPaused
+                    ? 'bg-teal hover:bg-teal-light text-white'
+                    : timer.state === 'resting'
+                      ? 'bg-amber/15 hover:bg-amber/25 text-amber border border-amber/30'
+                      : 'bg-amber/15 hover:bg-amber/25 text-amber border border-amber/30'
+                }`}
               >
                 {timer.isPaused ? 'Resume' : 'Pause'}
               </button>
 
-              <div className="flex gap-3">
+              {/* Skip Rest / Skip Set row */}
+              <div className="flex gap-3 mt-3 w-full">
                 {timer.state === 'resting' && (
                   <button
                     onClick={timer.skipRest}
-                    className="flex-1 py-3 rounded-xl border border-[#E5E5E5] dark:border-[#3A3A3C] text-sm font-medium text-muted dark:text-muted-dark touch-target"
+                    className="flex-1 min-h-[48px] rounded-lg border border-gray-200 dark:border-[#3A3A3C] bg-white dark:bg-[#2C2C2E] text-sm font-medium text-muted dark:text-muted-dark hover:text-teal transition-colors"
                   >
                     Skip Rest
                   </button>
                 )}
                 <button
                   onClick={timer.skipToNextSet}
-                  className="flex-1 py-3 rounded-xl border border-[#E5E5E5] dark:border-[#3A3A3C] text-sm font-medium text-muted dark:text-muted-dark touch-target"
+                  className="flex-1 min-h-[48px] rounded-lg border border-gray-200 dark:border-[#3A3A3C] bg-white dark:bg-[#2C2C2E] text-sm font-medium text-muted dark:text-muted-dark hover:text-teal transition-colors"
                 >
                   Skip Set
                 </button>
               </div>
-            </div>
+            </>
           )}
         </div>
-      ) : (
-        /* Rep-based exercises */
+      )}
+
+      {/* ======= REP-BASED EXERCISE ======= */}
+      {isRepBased && (
         <div className="flex flex-col items-center">
-          <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl p-8 w-full text-center mb-4">
-            <p className="text-sm font-medium text-muted dark:text-muted-dark mb-2">
-              Set {repSet} of {exercise.sets}
-            </p>
-            <div className="timer-digits text-6xl font-bold text-teal dark:text-teal-light mb-1">
-              {repCount}
-            </div>
-            <p className="text-sm text-muted dark:text-muted-dark">
-              of {exercise.reps} reps
-            </p>
+          {/* Rep counter circle */}
+          <div className="w-[220px] h-[220px] rounded-full border-8 border-gray-200 dark:border-[#3A3A3C] flex flex-col items-center justify-center relative">
+            {repResting ? (
+              <>
+                <span className="timer-digits text-5xl leading-none text-amber">
+                  {String(Math.floor(repRestRemaining / 60)).padStart(2, '0')}:{String(repRestRemaining % 60).padStart(2, '0')}
+                </span>
+                <span className="text-sm font-semibold tracking-widest mt-2 uppercase text-amber">
+                  REST
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-5xl font-bold leading-none text-teal dark:text-teal-light">
+                  {exercise.reps}
+                </span>
+                <span className="text-sm font-semibold tracking-widest mt-2 uppercase text-teal dark:text-teal-light">
+                  REPS
+                </span>
+              </>
+            )}
           </div>
 
-          <div className="w-full space-y-3">
+          {/* Set indicator */}
+          <p className="text-sm font-semibold text-muted dark:text-muted-dark mt-3 mb-4">
+            Set {repSet} of {totalSets}
+          </p>
+
+          {/* Complete Set / Skip Rest buttons */}
+          {repResting ? (
             <button
-              onClick={() => setRepCount(c => Math.min(c + 1, exercise.reps || 99))}
-              className="w-full py-4 rounded-xl bg-teal/10 text-teal dark:text-teal-light font-bold text-lg touch-target"
+              onClick={handleSkipRepRest}
+              className="w-full min-h-[56px] rounded-xl bg-amber/15 hover:bg-amber/25 text-amber border border-amber/30 font-semibold text-lg transition-colors"
             >
-              +1 Rep
+              Skip Rest
             </button>
+          ) : (
             <button
               onClick={handleCompleteRepSet}
-              className="w-full py-4 rounded-xl bg-teal text-white font-bold text-lg touch-target"
+              className="w-full min-h-[56px] rounded-xl bg-teal hover:bg-teal-light active:bg-teal/90 text-white font-semibold text-lg transition-colors"
             >
-              {repSet >= exercise.sets ? 'Complete Exercise' : 'Complete Set'}
+              {repSet >= totalSets ? 'Complete Exercise' : 'Complete Set'}
             </button>
+          )}
+
+          {/* Progress dots */}
+          <div className="flex justify-center gap-2 mt-4">
+            {Array.from({ length: totalSets }).map((_, i) => (
+              <div
+                key={i}
+                className={`w-3 h-3 rounded-full transition-colors ${
+                  i < repSet - (repResting || repSet > totalSets ? 0 : 1)
+                    ? 'bg-teal dark:bg-teal-light'
+                    : 'bg-gray-200 dark:bg-[#3A3A3C]'
+                }`}
+              />
+            ))}
           </div>
         </div>
       )}
