@@ -218,6 +218,12 @@ export default function useTimer({
     remainingOnPauseRef.current = 0;
   }, [cancelFrame]);
 
+  /** Set the starting set number before the timer has been started (idle state only). */
+  const setInitialSet = useCallback((set) => {
+    setCurrentSet(set);
+    currentSetRef.current = set;
+  }, []);
+
   // Clean up on unmount
   useEffect(() => {
     return () => cancelFrame();
@@ -234,5 +240,6 @@ export default function useTimer({
     skipRest,
     skipToNextSet,
     reset,
+    setInitialSet,
   };
 }
