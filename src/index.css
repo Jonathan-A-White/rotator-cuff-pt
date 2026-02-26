@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "DM Sans", sans-serif;
+  --font-mono: "Space Mono", monospace;
+
+  --color-bg: #FAF8F5;
+  --color-bg-dark: #1C1C1E;
+  --color-text: #1A1A1A;
+  --color-text-dark: #F5F5F5;
+  --color-teal: #0D9488;
+  --color-teal-light: #14B8A6;
+  --color-amber: #D97706;
+  --color-red: #DC2626;
+  --color-surface: #FFFFFF;
+  --color-surface-dark: #2C2C2E;
+  --color-border: #E5E5E5;
+  --color-border-dark: #3A3A3C;
+  --color-muted: #6B7280;
+  --color-muted-dark: #9CA3AF;
+}
+
+html {
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100dvh;
+  margin: 0;
+  overscroll-behavior: none;
+}
+
+.dark body {
+  background-color: var(--color-bg-dark);
+  color: var(--color-text-dark);
+}
+
+.dark .surface {
+  background-color: var(--color-surface-dark);
+  border-color: var(--color-border-dark);
+}
+
+.timer-digits {
+  font-family: var(--font-mono);
+}
+
+.touch-target {
+  min-height: 48px;
+  min-width: 48px;
+}
+
+@keyframes timer-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+.timer-pulse {
+  animation: timer-pulse 1s ease-in-out infinite;
+}
+
+.page-enter {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes flash {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: rgba(13, 148, 136, 0.15); }
+}
+
+.timer-flash {
+  animation: flash 0.5s ease-in-out 3;
+}
