@@ -1,0 +1,16 @@
+{
+  "appId": "com.rotatorpt.app",
+  "appName": "RC PT Tracker",
+  "webDir": "dist-android",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#FAF8F5"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  }
+}
