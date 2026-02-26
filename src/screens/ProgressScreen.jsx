@@ -88,9 +88,9 @@ export default function ProgressScreen() {
 
   const exerciseCompletion = phaseExercises.map((ex) => {
     const exLogs = last7Logs.filter((l) => l.exerciseId === ex.id)
-    // Count unique days with at least one log
-    const daysWithLogs = new Set(exLogs.map((l) => l.date)).size
-    const pct = Math.round((daysWithLogs / 7) * 100)
+    const totalSetsCompleted = exLogs.reduce((sum, l) => sum + (l.setsCompleted || 0), 0)
+    const totalExpected = (ex.sets || 1) * 7
+    const pct = Math.round((totalSetsCompleted / totalExpected) * 100)
     return { id: ex.id, name: ex.shortName || ex.name, pct }
   })
 
