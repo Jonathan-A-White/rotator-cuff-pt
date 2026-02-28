@@ -107,6 +107,42 @@ export async function getAllLogs() {
   return db.getAll("workoutLogs");
 }
 
+/**
+ * Adjust the total logged sets for a specific exercise on a specific date.
+ * Replaces all existing log entries for that exercise/date with a single entry
+ * at the new total (or removes them all if newTotal <= 0).
+ */
+export async function adjustSetsForDate(exerciseId, dateStr, newTotal) {
+  const db = await getDB();
+  const dayLogs = await db.getAllFromIndex("workoutLogs", "date", dateStr);
+  const exerciseLogs = dayLogs.filter((l) => l.exerciseId === exerciseId);
+
+  const tx = db.transaction("workoutLogs", "readwrite");
+  const store = tx.objectStore("workoutLogs");
+
+  // Delete all existing logs for this exercise on this date
+  for (const log of exerciseLogs) {
+    await store.delete(log.id);
+  }
+
+  // If the new total is positive, create a single consolidated entry
+  if (newTotal > 0) {
+    // Preserve pain/notes from the most recent log if available
+    const latest = exerciseLogs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
+    await store.add({
+      id: crypto.randomUUID(),
+      date: dateStr,
+      exerciseId,
+      setsCompleted: newTotal,
+      timestamp: latest?.timestamp || Date.now(),
+      ...(latest?.painLevel != null ? { painLevel: latest.painLevel } : {}),
+      ...(latest?.notes ? { notes: latest.notes } : {}),
+    });
+  }
+
+  await tx.done;
+}
+
 // ── Assessments ──────────────────────────────────────────────────────────
 
 export async function saveAssessment(assessment) {
