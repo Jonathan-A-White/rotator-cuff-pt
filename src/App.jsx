@@ -8,6 +8,7 @@ import AssessmentScreen from './screens/AssessmentScreen'
 import SettingsScreen from './screens/SettingsScreen'
 import PhaseRulesScreen from './screens/PhaseRulesScreen'
 import ChecklistScreen from './screens/ChecklistScreen'
+import HistoryScreen from './screens/HistoryScreen'
 import NavBar from './components/NavBar'
 import { getSettings } from './db'
 
@@ -46,6 +47,8 @@ export default function App() {
         <Route path="/settings" element={<SettingsScreen onDarkModeChange={setDarkMode} />} />
         <Route path="/phase-rules" element={<PhaseRulesScreen />} />
         <Route path="/checklist" element={<ChecklistScreen />} />
+        <Route path="/history" element={<HistoryScreen />} />
+        <Route path="/history/:exerciseId" element={<HistoryScreen />} />
       </Routes>
       <NavBar />
     </div>

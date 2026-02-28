@@ -67,10 +67,14 @@ export async function saveSettings(settings) {
 
 export async function logWorkout(log) {
   const db = await getDB();
+  const now = Date.now();
   const entry = {
     ...log,
     id: log.id || crypto.randomUUID(),
-    timestamp: log.timestamp || Date.now(),
+    timestamp: log.timestamp || now,
+    source: log.source || "timer",
+    startTime: log.startTime || now,
+    endTime: log.endTime || now,
   };
   await db.add("workoutLogs", entry);
   return entry;
@@ -129,18 +133,77 @@ export async function adjustSetsForDate(exerciseId, dateStr, newTotal) {
   if (newTotal > 0) {
     // Preserve pain/notes from the most recent log if available
     const latest = exerciseLogs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
+    const now = Date.now();
     await store.add({
       id: crypto.randomUUID(),
       date: dateStr,
       exerciseId,
       setsCompleted: newTotal,
-      timestamp: latest?.timestamp || Date.now(),
+      timestamp: latest?.timestamp || now,
+      source: "manual",
+      startTime: latest?.startTime || latest?.timestamp || now,
+      endTime: latest?.endTime || latest?.timestamp || now,
       ...(latest?.painLevel != null ? { painLevel: latest.painLevel } : {}),
       ...(latest?.notes ? { notes: latest.notes } : {}),
     });
   }
 
   await tx.done;
+}
+
+/**
+ * Delete a single workout log entry by its ID.
+ */
+export async function deleteLog(logId) {
+  const db = await getDB();
+  await db.delete("workoutLogs", logId);
+}
+
+/**
+ * Add a manual log entry (from edit mode).
+ * Creates a single entry with source "manual" and setsCompleted = 1.
+ */
+export async function addManualLog(exerciseId, dateStr) {
+  const now = Date.now();
+  return logWorkout({
+    date: dateStr,
+    exerciseId,
+    setsCompleted: 1,
+    source: "manual",
+    timestamp: now,
+    startTime: now,
+    endTime: now,
+  });
+}
+
+/**
+ * Smart-remove one set from the most recent log entry for an exercise on a date.
+ * If the entry reaches 0 sets, it is deleted entirely.
+ * Returns the removed/modified log entry (or null if nothing to remove).
+ */
+export async function decrementLatestLog(exerciseId, dateStr) {
+  const db = await getDB();
+  const dayLogs = await db.getAllFromIndex("workoutLogs", "date", dateStr);
+  const exerciseLogs = dayLogs
+    .filter((l) => l.exerciseId === exerciseId)
+    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+  if (exerciseLogs.length === 0) return null;
+
+  const latest = exerciseLogs[0];
+  const tx = db.transaction("workoutLogs", "readwrite");
+  const store = tx.objectStore("workoutLogs");
+
+  if ((latest.setsCompleted || 0) <= 1) {
+    // Delete the entry entirely
+    await store.delete(latest.id);
+  } else {
+    // Decrement setsCompleted by 1
+    await store.put({ ...latest, setsCompleted: latest.setsCompleted - 1 });
+  }
+
+  await tx.done;
+  return latest;
 }
 
 // ── Assessments ──────────────────────────────────────────────────────────

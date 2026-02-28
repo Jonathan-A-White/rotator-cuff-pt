@@ -111,7 +111,10 @@ export default function ProgressScreen() {
       <h1 className="text-2xl font-bold dark:text-white">Progress</h1>
 
       {/* ── Streak Tracker ── */}
-      <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl p-5 flex items-center gap-4">
+      <button
+        onClick={() => navigate('/history')}
+        className="w-full bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl p-5 flex items-center gap-4 text-left hover:border-teal/30 transition-colors"
+      >
         <div aria-hidden="true">
           <svg viewBox="0 0 24 24" className="w-10 h-10" fill="none">
             <path
@@ -127,11 +130,14 @@ export default function ProgressScreen() {
             />
           </svg>
         </div>
-        <div>
+        <div className="flex-1">
           <div className="text-4xl font-bold tabular-nums dark:text-white">{streak}</div>
           <div className="text-sm text-muted dark:text-muted-dark">day streak</div>
         </div>
-      </div>
+        <svg viewBox="0 0 24 24" className="w-5 h-5 text-muted dark:text-muted-dark shrink-0" fill="none" stroke="currentColor" strokeWidth={2}>
+          <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
 
       {/* ── Weekly Chart (SVG bars) ── */}
       <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl p-5">
@@ -150,7 +156,16 @@ export default function ProgressScreen() {
             const isToday = date === today()
 
             return (
-              <g key={date}>
+              <g
+                key={date}
+                onClick={() => totalSets > 0 && navigate(`/history?date=${date}`)}
+                className={totalSets > 0 ? 'cursor-pointer' : ''}
+                role={totalSets > 0 ? 'button' : undefined}
+                tabIndex={totalSets > 0 ? 0 : undefined}
+                aria-label={totalSets > 0 ? `View ${day} history: ${totalSets} sets` : undefined}
+              >
+                {/* Hit area (invisible wider rect for easier tapping) */}
+                <rect x={i * 50} y={0} width={50} height={chartHeight + 30} fill="transparent" />
                 {/* Count label above bar */}
                 {totalSets > 0 && (
                   <text
@@ -201,16 +216,25 @@ export default function ProgressScreen() {
         <h2 className="text-base font-semibold mb-4 dark:text-white">Exercise Balance (7 days)</h2>
         <div className="space-y-3">
           {exerciseCompletion.map(({ id, name, pct }) => (
-            <div key={id} className="space-y-1">
+            <button
+              key={id}
+              onClick={() => navigate(`/history/${id}`)}
+              className="w-full space-y-1 text-left hover:bg-gray-50 dark:hover:bg-[#3A3A3C]/50 -mx-1 px-1 py-1 rounded-lg transition-colors"
+            >
               <div className="flex items-center justify-between">
                 <span className="text-sm truncate pr-2 dark:text-gray-200">{name}</span>
-                <span
-                  className={`text-sm font-semibold tabular-nums ${
-                    pct < 50 ? 'text-amber' : 'text-teal dark:text-teal-light'
-                  }`}
-                >
-                  {pct}%
-                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span
+                    className={`text-sm font-semibold tabular-nums ${
+                      pct < 50 ? 'text-amber' : 'text-teal dark:text-teal-light'
+                    }`}
+                  >
+                    {pct}%
+                  </span>
+                  <svg viewBox="0 0 24 24" className="w-4 h-4 text-muted dark:text-muted-dark" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
               </div>
               <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                 <div
@@ -220,7 +244,7 @@ export default function ProgressScreen() {
                   style={{ width: `${Math.min(pct, 100)}%` }}
                 />
               </div>
-            </div>
+            </button>
           ))}
           {exerciseCompletion.length === 0 && (
             <p className="text-sm text-muted dark:text-muted-dark">No exercises for this phase.</p>
@@ -239,6 +263,16 @@ export default function ProgressScreen() {
 
       {/* ── Links ── */}
       <div className="space-y-3">
+        <button
+          onClick={() => navigate('/history')}
+          className="w-full min-h-[48px] bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl px-5 py-4 flex items-center justify-between text-left"
+        >
+          <span className="font-medium dark:text-white">Exercise History</span>
+          <svg viewBox="0 0 24 24" className="w-5 h-5 text-muted dark:text-muted-dark" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+
         <button
           onClick={() => navigate('/assessment')}
           className="w-full min-h-[48px] bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl px-5 py-4 flex items-center justify-between text-left"
