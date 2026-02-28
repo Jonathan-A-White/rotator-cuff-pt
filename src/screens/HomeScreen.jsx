@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { exercises } from '../data/exercises'
-import { getSettings, getLogsForDate } from '../db'
+import { getSettings, getLogsForDate, adjustSetsForDate } from '../db'
 import { today } from '../utils/dateUtils'
 import ExerciseCard from '../components/ExerciseCard'
 
@@ -10,6 +10,7 @@ export default function HomeScreen() {
   const [currentPhase, setCurrentPhase] = useState(1)
   const [logs, setLogs] = useState([])
   const [loading, setLoading] = useState(true)
+  const [editMode, setEditMode] = useState(false)
 
   const phaseDescriptions = {
     1: 'Pain Reduction & Isometric Loading',
@@ -39,6 +40,22 @@ export default function HomeScreen() {
     load()
     return () => { cancelled = true }
   }, [])
+
+  // Reload today's logs from DB
+  const reloadLogs = useCallback(async () => {
+    const todayLogs = await getLogsForDate(today())
+    setLogs(todayLogs)
+  }, [])
+
+  // Adjust sets for an exercise (used in edit mode)
+  const handleAdjustSets = useCallback(async (exerciseId, delta) => {
+    const currentSets = logs
+      .filter((l) => l.exerciseId === exerciseId)
+      .reduce((sum, l) => sum + (l.setsCompleted || 0), 0)
+    const newTotal = Math.max(0, currentSets + delta)
+    await adjustSetsForDate(exerciseId, today(), newTotal)
+    await reloadLogs()
+  }, [logs, reloadLogs])
 
   // Phase is cumulative: phase 2 shows phase 1+2, phase 3 shows all
   const phaseExercises = exercises
@@ -111,9 +128,21 @@ export default function HomeScreen() {
       </div>
 
       {/* Today's exercises */}
-      <h2 className="text-lg font-bold mb-3 dark:text-white">
-        Today&apos;s Exercises
-      </h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-lg font-bold dark:text-white">
+          Today&apos;s Exercises
+        </h2>
+        <button
+          onClick={() => setEditMode((v) => !v)}
+          className={`text-sm font-medium px-3 py-1 rounded-lg transition-colors ${
+            editMode
+              ? 'bg-teal text-white'
+              : 'text-teal dark:text-teal-light hover:bg-teal/10'
+          }`}
+        >
+          {editMode ? 'Done' : 'Edit'}
+        </button>
+      </div>
 
       {phaseExercises.length === 0 ? (
         <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-xl p-6 text-center">
@@ -130,6 +159,8 @@ export default function HomeScreen() {
               setsCompleted={setsCompletedMap[exercise.id] || 0}
               onStart={() => navigate(`/exercise/${exercise.id}`)}
               onDetail={() => navigate(`/exercise/${exercise.id}/detail`)}
+              editMode={editMode}
+              onAdjustSets={(delta) => handleAdjustSets(exercise.id, delta)}
             />
           ))}
         </div>

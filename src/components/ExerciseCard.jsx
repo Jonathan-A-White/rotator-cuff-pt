@@ -11,6 +11,8 @@ export default function ExerciseCard({
   setsCompleted = 0,
   onStart,
   onDetail,
+  editMode = false,
+  onAdjustSets,
 }) {
   const longPressTimer = useRef(null);
   const isLongPress = useRef(false);
@@ -151,27 +153,65 @@ export default function ExerciseCard({
         </button>
       </div>
 
-      {/* Start button */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          if (!isLongPress.current) onStart?.();
-        }}
-        disabled={isComplete}
-        className={`
-          mt-3 w-full rounded-lg py-3
-          text-sm font-semibold text-white
-          touch-target min-h-[48px]
-          transition-colors duration-150
-          ${isComplete
-            ? 'bg-gray-300 dark:bg-[#3A3A3C] text-gray-500 dark:text-gray-500 cursor-default'
-            : 'bg-teal hover:bg-teal-light active:bg-teal/90 cursor-pointer'
-          }
-        `}
-      >
-        {isComplete ? 'Completed' : 'Start'}
-      </button>
+      {/* Edit mode controls or Start button */}
+      {editMode ? (
+        <div className="mt-3 flex items-center justify-center gap-4">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAdjustSets?.(-1);
+            }}
+            disabled={setsCompleted <= 0}
+            className={`
+              w-12 h-12 rounded-full flex items-center justify-center
+              text-lg font-bold transition-colors
+              ${setsCompleted <= 0
+                ? 'bg-gray-200 dark:bg-[#3A3A3C] text-gray-400 dark:text-gray-600 cursor-default'
+                : 'bg-red/10 text-red hover:bg-red/20 active:bg-red/30 border border-red/30'
+              }
+            `}
+            aria-label={`Decrease sets for ${name}`}
+          >
+            &minus;
+          </button>
+          <span className="text-lg font-bold tabular-nums min-w-[3ch] text-center dark:text-white">
+            {setsCompleted}
+          </span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAdjustSets?.(1);
+            }}
+            className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold bg-teal/10 text-teal hover:bg-teal/20 active:bg-teal/30 border border-teal/30 transition-colors"
+            aria-label={`Increase sets for ${name}`}
+          >
+            +
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!isLongPress.current) onStart?.();
+          }}
+          disabled={isComplete}
+          className={`
+            mt-3 w-full rounded-lg py-3
+            text-sm font-semibold text-white
+            touch-target min-h-[48px]
+            transition-colors duration-150
+            ${isComplete
+              ? 'bg-gray-300 dark:bg-[#3A3A3C] text-gray-500 dark:text-gray-500 cursor-default'
+              : 'bg-teal hover:bg-teal-light active:bg-teal/90 cursor-pointer'
+            }
+          `}
+        >
+          {isComplete ? 'Completed' : 'Start'}
+        </button>
+      )}
     </div>
   );
 }

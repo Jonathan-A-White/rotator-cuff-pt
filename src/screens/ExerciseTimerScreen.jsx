@@ -25,6 +25,10 @@ export default function ExerciseTimerScreen() {
   const [repResting, setRepResting] = useState(false)
   const [repRestRemaining, setRepRestRemaining] = useState(0)
 
+  // Capture the date when the exercise session starts so that if midnight passes
+  // mid-exercise, sets are still logged to the day the user actually began.
+  const sessionDateRef = useRef(today())
+
   const audioInitRef = useRef(false)
   const warningFiredRef = useRef(false)
   // Tracks whether the current set's hold phase completed (needed to correctly count
@@ -42,7 +46,7 @@ export default function ExerciseTimerScreen() {
   // Initialize starting set from today's already-logged sets for this exercise
   useEffect(() => {
     if (!exercise) return
-    getLogsForDate(today()).then((logs) => {
+    getLogsForDate(sessionDateRef.current).then((logs) => {
       const alreadyDone = logs
         .filter((l) => l.exerciseId === id)
         .reduce((sum, l) => sum + (l.setsCompleted || 0), 0)
@@ -192,7 +196,7 @@ export default function ExerciseTimerScreen() {
       ? timer.currentSet
       : repSet
     await logWorkout({
-      date: today(),
+      date: sessionDateRef.current,
       exerciseId: id,
       setsCompleted: completed ? totalSets : setsCompleted,
       painLevel: painLevel || undefined,
@@ -219,7 +223,7 @@ export default function ExerciseTimerScreen() {
 
     if (completedSets > 0) {
       await logWorkout({
-        date: today(),
+        date: sessionDateRef.current,
         exerciseId: id,
         setsCompleted: completedSets,
       })
