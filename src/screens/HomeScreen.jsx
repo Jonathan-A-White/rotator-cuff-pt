@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { exercises } from '../data/exercises'
-import { getSettings, getLogsForDate, adjustSetsForDate } from '../db'
+import { getSettings, getLogsForDate, addManualLog, decrementLatestLog } from '../db'
 import { today } from '../utils/dateUtils'
 import ExerciseCard from '../components/ExerciseCard'
 
@@ -47,15 +47,17 @@ export default function HomeScreen() {
     setLogs(todayLogs)
   }, [])
 
-  // Adjust sets for an exercise (used in edit mode)
-  const handleAdjustSets = useCallback(async (exerciseId, delta) => {
-    const currentSets = logs
-      .filter((l) => l.exerciseId === exerciseId)
-      .reduce((sum, l) => sum + (l.setsCompleted || 0), 0)
-    const newTotal = Math.max(0, currentSets + delta)
-    await adjustSetsForDate(exerciseId, today(), newTotal)
+  // Add a manual set (edit mode +)
+  const handleAddSet = useCallback(async (exerciseId) => {
+    await addManualLog(exerciseId, today())
     await reloadLogs()
-  }, [logs, reloadLogs])
+  }, [reloadLogs])
+
+  // Smart-remove a set (edit mode -)
+  const handleRemoveSet = useCallback(async (exerciseId) => {
+    await decrementLatestLog(exerciseId, today())
+    await reloadLogs()
+  }, [reloadLogs])
 
   // Phase is cumulative: phase 2 shows phase 1+2, phase 3 shows all
   const phaseExercises = exercises
@@ -160,7 +162,8 @@ export default function HomeScreen() {
               onStart={() => navigate(`/exercise/${exercise.id}`)}
               onDetail={() => navigate(`/exercise/${exercise.id}/detail`)}
               editMode={editMode}
-              onAdjustSets={(delta) => handleAdjustSets(exercise.id, delta)}
+              onAddSet={() => handleAddSet(exercise.id)}
+              onRemoveSet={() => handleRemoveSet(exercise.id)}
             />
           ))}
         </div>

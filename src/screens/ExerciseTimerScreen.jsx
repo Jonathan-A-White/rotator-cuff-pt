@@ -28,6 +28,8 @@ export default function ExerciseTimerScreen() {
   // Capture the date when the exercise session starts so that if midnight passes
   // mid-exercise, sets are still logged to the day the user actually began.
   const sessionDateRef = useRef(today())
+  // Track when the exercise session actually started (first Start press)
+  const sessionStartTimeRef = useRef(null)
 
   const audioInitRef = useRef(false)
   const warningFiredRef = useRef(false)
@@ -147,6 +149,7 @@ export default function ExerciseTimerScreen() {
   // Handle start for isometric/hybrid exercises
   const handleStart = useCallback(() => {
     holdCompletedRef.current = false  // new hold beginning — clear previous state
+    if (!sessionStartTimeRef.current) sessionStartTimeRef.current = Date.now()
     ensureAudio()
     wakeLock.request()
     if (settings?.timerSound) playStartTone()
@@ -165,6 +168,7 @@ export default function ExerciseTimerScreen() {
 
   // Handle complete set for rep-based exercises
   const handleCompleteRepSet = useCallback(() => {
+    if (!sessionStartTimeRef.current) sessionStartTimeRef.current = Date.now()
     ensureAudio()
     wakeLock.request()
     if (settings?.timerSound) playCompleteTone()
@@ -195,12 +199,16 @@ export default function ExerciseTimerScreen() {
     const setsCompleted = (isIsometric || isHybrid)
       ? timer.currentSet
       : repSet
+    const now = Date.now()
     await logWorkout({
       date: sessionDateRef.current,
       exerciseId: id,
       setsCompleted: completed ? totalSets : setsCompleted,
       painLevel: painLevel || undefined,
       notes: notes.trim() || undefined,
+      source: 'timer',
+      startTime: sessionStartTimeRef.current || now,
+      endTime: now,
     })
     navigate('/')
   }, [id, isIsometric, isHybrid, timer.currentSet, repSet, completed, totalSets, painLevel, notes, navigate])
@@ -222,10 +230,14 @@ export default function ExerciseTimerScreen() {
     }
 
     if (completedSets > 0) {
+      const now = Date.now()
       await logWorkout({
         date: sessionDateRef.current,
         exerciseId: id,
         setsCompleted: completedSets,
+        source: 'timer',
+        startTime: sessionStartTimeRef.current || now,
+        endTime: now,
       })
     }
 

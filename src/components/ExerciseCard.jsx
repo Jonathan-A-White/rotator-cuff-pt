@@ -12,7 +12,8 @@ export default function ExerciseCard({
   onStart,
   onDetail,
   editMode = false,
-  onAdjustSets,
+  onAddSet,
+  onRemoveSet,
 }) {
   const longPressTimer = useRef(null);
   const isLongPress = useRef(false);
@@ -160,7 +161,7 @@ export default function ExerciseCard({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onAdjustSets?.(-1);
+              onRemoveSet?.();
             }}
             disabled={setsCompleted <= 0}
             className={`
@@ -171,7 +172,7 @@ export default function ExerciseCard({
                 : 'bg-red/10 text-red hover:bg-red/20 active:bg-red/30 border border-red/30'
               }
             `}
-            aria-label={`Decrease sets for ${name}`}
+            aria-label={`Remove set for ${name}`}
           >
             &minus;
           </button>
@@ -182,10 +183,10 @@ export default function ExerciseCard({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onAdjustSets?.(1);
+              onAddSet?.();
             }}
             className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold bg-teal/10 text-teal hover:bg-teal/20 active:bg-teal/30 border border-teal/30 transition-colors"
-            aria-label={`Increase sets for ${name}`}
+            aria-label={`Add set for ${name}`}
           >
             +
           </button>
