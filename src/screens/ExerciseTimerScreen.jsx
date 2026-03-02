@@ -5,6 +5,7 @@ import { getSettings, logWorkout, getLogsForDate } from '../db'
 import { today } from '../utils/dateUtils'
 import useTimer from '../hooks/useTimer'
 import useWakeLock from '../hooks/useWakeLock'
+import useNotification from '../hooks/useNotification'
 import { initAudio, playStartTone, playWarningBeeps, playCompleteTone, playRestCompleteTone } from '../utils/audio'
 import TimerRing from '../components/TimerRing'
 import PainSlider from '../components/PainSlider'
@@ -33,12 +34,16 @@ export default function ExerciseTimerScreen() {
 
   const audioInitRef = useRef(false)
   const warningFiredRef = useRef(false)
+  // Absolute end time for rep-based rest so the countdown stays accurate
+  // even if the app was backgrounded during the rest period.
+  const repRestEndTimeRef = useRef(0)
   // Tracks whether the current set's hold phase completed (needed to correctly count
   // sets when autoStartRest=false leaves state as 'idle' after a finished hold)
   const holdCompletedRef = useRef(false)
   const prevCurrentSetRef = useRef(1)
 
   const wakeLock = useWakeLock()
+  const notification = useNotification()
 
   // Load settings on mount
   useEffect(() => {
@@ -76,19 +81,22 @@ export default function ExerciseTimerScreen() {
     holdCompletedRef.current = true
     if (settings?.timerSound) playCompleteTone()
     if (settings?.timerVibrate && navigator.vibrate) navigator.vibrate(500)
-  }, [settings])
+    notification.notify('Hold complete', 'Good work — now rest.')
+  }, [settings, notification])
 
   const handleRestComplete = useCallback(() => {
     if (settings?.timerSound) playRestCompleteTone()
     if (settings?.timerVibrate && navigator.vibrate) navigator.vibrate([200, 100, 200])
-  }, [settings])
+    notification.notify('Rest over', 'Ready for your next set!')
+  }, [settings, notification])
 
   const handleAllComplete = useCallback(() => {
     if (settings?.timerSound) playCompleteTone()
     if (settings?.timerVibrate && navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500])
+    notification.notify('Exercise complete', 'All sets done — great work!')
     wakeLock.release()
     setCompleted(true)
-  }, [settings, wakeLock])
+  }, [settings, notification, wakeLock])
 
   // Timer hook for isometric / hybrid exercises
   const timer = useTimer({
@@ -122,21 +130,27 @@ export default function ExerciseTimerScreen() {
     }
   }, [timer.state, timer.timeRemaining, settings])
 
-  // Rep-based rest countdown
+  // Rep-based rest countdown — uses absolute end time so the display stays
+  // accurate even if the app was backgrounded during the rest period.
   useEffect(() => {
     if (!repResting || repRestRemaining <= 0) {
       if (repResting && repRestRemaining <= 0) {
         setRepResting(false)
+        repRestEndTimeRef.current = 0
         if (settings?.timerSound) playRestCompleteTone()
         if (settings?.timerVibrate && navigator.vibrate) navigator.vibrate([200, 100, 200])
+        notification.notify('Rest over', 'Ready for your next set!')
       }
       return
     }
     const interval = setInterval(() => {
-      setRepRestRemaining((prev) => Math.max(0, prev - 1))
+      const newRemaining = repRestEndTimeRef.current > 0
+        ? Math.max(0, Math.ceil((repRestEndTimeRef.current - Date.now()) / 1000))
+        : Math.max(0, repRestRemaining - 1)
+      setRepRestRemaining(newRemaining)
     }, 1000)
     return () => clearInterval(interval)
-  }, [repResting, repRestRemaining, settings])
+  }, [repResting, repRestRemaining, settings, notification])
 
   // Ensure audio context is initialized (requires user gesture)
   const ensureAudio = useCallback(() => {
@@ -146,11 +160,30 @@ export default function ExerciseTimerScreen() {
     }
   }, [])
 
+  // When the app returns to the foreground, resume the AudioContext (the browser
+  // may have suspended it while backgrounded) and resync the rep rest countdown.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return
+      // Best-effort AudioContext resume — works reliably on Android PWA
+      if (audioInitRef.current) initAudio()
+      // Snap the rep rest display to the correct remaining time
+      if (repResting && repRestEndTimeRef.current > 0) {
+        const newRemaining = Math.max(0, Math.ceil((repRestEndTimeRef.current - Date.now()) / 1000))
+        setRepRestRemaining(newRemaining)
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [repResting])
+
   // Handle start for isometric/hybrid exercises
   const handleStart = useCallback(() => {
     holdCompletedRef.current = false  // new hold beginning — clear previous state
     if (!sessionStartTimeRef.current) sessionStartTimeRef.current = Date.now()
     ensureAudio()
+    // Request notification permission on first start (requires a user gesture)
+    if (notification.permission === 'default') notification.requestPermission()
     wakeLock.request()
     if (settings?.timerSound) playStartTone()
     if (settings?.timerVibrate && navigator.vibrate) navigator.vibrate(200)
@@ -170,6 +203,7 @@ export default function ExerciseTimerScreen() {
   const handleCompleteRepSet = useCallback(() => {
     if (!sessionStartTimeRef.current) sessionStartTimeRef.current = Date.now()
     ensureAudio()
+    if (notification.permission === 'default') notification.requestPermission()
     wakeLock.request()
     if (settings?.timerSound) playCompleteTone()
     if (settings?.timerVibrate && navigator.vibrate) navigator.vibrate(300)
@@ -183,6 +217,7 @@ export default function ExerciseTimerScreen() {
       if (restTime > 0) {
         setRepResting(true)
         setRepRestRemaining(restTime)
+        repRestEndTimeRef.current = Date.now() + restTime * 1000
       }
       setRepSet((s) => s + 1)
     }
@@ -192,6 +227,7 @@ export default function ExerciseTimerScreen() {
   const handleSkipRepRest = useCallback(() => {
     setRepResting(false)
     setRepRestRemaining(0)
+    repRestEndTimeRef.current = 0
   }, [])
 
   // Save workout and navigate back
