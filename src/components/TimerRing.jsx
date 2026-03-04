@@ -72,7 +72,6 @@ export default function TimerRing({
           style={{
             transform: 'rotate(-90deg)',
             transformOrigin: 'center',
-            transition: 'stroke-dashoffset 0.1s linear',
           }}
         />
       </svg>
