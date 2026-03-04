@@ -5,6 +5,7 @@ const DB_VERSION = 1;
 
 const DEFAULT_SETTINGS = {
   currentPhase: 1,
+  phaseStartDate: null, // ISO date string when current phase began
   exerciseOrder: [],
   timerSound: true,
   timerVibrate: true,
