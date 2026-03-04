@@ -73,19 +73,20 @@ export default function HomeScreen() {
     setsCompletedMap[log.exerciseId] += log.setsCompleted || 0
   })
 
-  // Daily summary calculations
+  // Daily summary calculations – each exercise counts equally regardless of
+  // how many sets it requires (completing 1/1 = completing 5/5).
   const exercisesDone = phaseExercises.filter(
     (ex) => (setsCompletedMap[ex.id] || 0) >= ex.sets
   ).length
   const totalExercises = phaseExercises.length
-  const totalSetsCompleted = Object.values(setsCompletedMap).reduce(
-    (sum, v) => sum + v,
-    0
-  )
-  const totalSetsTarget = phaseExercises.reduce(
-    (sum, ex) => sum + ex.sets,
-    0
-  )
+  const overallPct = totalExercises > 0
+    ? Math.round(
+        phaseExercises.reduce((sum, ex) => {
+          const done = setsCompletedMap[ex.id] || 0
+          return sum + Math.min(done / ex.sets, 1)
+        }, 0) / totalExercises * 100
+      )
+    : 0
 
   if (loading) {
     return (
@@ -183,9 +184,9 @@ export default function HomeScreen() {
               &middot;
             </span>
             <span className="text-teal dark:text-teal-light font-bold">
-              {totalSetsCompleted}/{totalSetsTarget}
+              {overallPct}%
             </span>
-            <span className="text-muted dark:text-muted-dark">total sets</span>
+            <span className="text-muted dark:text-muted-dark">complete</span>
           </div>
         </div>
       </div>
