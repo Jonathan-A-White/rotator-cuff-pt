@@ -160,6 +160,19 @@ export async function deleteLog(logId) {
 }
 
 /**
+ * Update an existing workout log entry by its ID.
+ * Merges the provided fields into the existing record.
+ */
+export async function updateLog(logId, updates) {
+  const db = await getDB();
+  const existing = await db.get("workoutLogs", logId);
+  if (!existing) return null;
+  const updated = { ...existing, ...updates };
+  await db.put("workoutLogs", updated);
+  return updated;
+}
+
+/**
  * Add a manual log entry (from edit mode).
  * Creates a single entry with source "manual" and setsCompleted = 1.
  */
