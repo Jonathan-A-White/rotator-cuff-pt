@@ -74,13 +74,19 @@ export default function ProgressScreen() {
   const weekDates = getWeekDates()
   const weekLogs = logs.filter((l) => weekDates.includes(l.date))
 
-  // Per-day set totals for weekly chart
+  // Per-day exercises-completed count for weekly chart (normalized so every
+  // exercise counts equally regardless of how many sets it requires).
   const perDay = weekDates.map((date) => {
     const dayLogs = weekLogs.filter((l) => l.date === date)
-    const totalSets = dayLogs.reduce((sum, l) => sum + (l.setsCompleted || 1), 0)
-    return { date, day: dayOfWeek(date), totalSets }
+    const exercisesCompleted = phaseExercises.filter((ex) => {
+      const setsForEx = dayLogs
+        .filter((l) => l.exerciseId === ex.id)
+        .reduce((sum, l) => sum + (l.setsCompleted || 0), 0)
+      return setsForEx >= ex.sets
+    }).length
+    return { date, day: dayOfWeek(date), exercisesCompleted }
   })
-  const maxSets = Math.max(...perDay.map((d) => d.totalSets), 1)
+  const maxCompleted = Math.max(...perDay.map((d) => d.exercisesCompleted), 1)
 
   // Per-exercise completion rates for the last 7 days
   const last7Start = daysAgo(6)
@@ -148,26 +154,26 @@ export default function ProgressScreen() {
           role="img"
           aria-label="Weekly sets bar chart"
         >
-          {perDay.map(({ date, day, totalSets }, i) => {
+          {perDay.map(({ date, day, exercisesCompleted }, i) => {
             const barWidth = 36
             const x = i * 50 + (50 - barWidth) / 2
-            const barH = totalSets > 0 ? (totalSets / maxSets) * chartHeight : 4
+            const barH = exercisesCompleted > 0 ? (exercisesCompleted / maxCompleted) * chartHeight : 4
             const barY = chartHeight - barH
             const isToday = date === today()
 
             return (
               <g
                 key={date}
-                onClick={() => totalSets > 0 && navigate(`/history?date=${date}`)}
-                className={totalSets > 0 ? 'cursor-pointer' : ''}
-                role={totalSets > 0 ? 'button' : undefined}
-                tabIndex={totalSets > 0 ? 0 : undefined}
-                aria-label={totalSets > 0 ? `View ${day} history: ${totalSets} sets` : undefined}
+                onClick={() => exercisesCompleted > 0 && navigate(`/history?date=${date}`)}
+                className={exercisesCompleted > 0 ? 'cursor-pointer' : ''}
+                role={exercisesCompleted > 0 ? 'button' : undefined}
+                tabIndex={exercisesCompleted > 0 ? 0 : undefined}
+                aria-label={exercisesCompleted > 0 ? `View ${day} history: ${exercisesCompleted} exercises` : undefined}
               >
                 {/* Hit area (invisible wider rect for easier tapping) */}
                 <rect x={i * 50} y={0} width={50} height={chartHeight + 30} fill="transparent" />
                 {/* Count label above bar */}
-                {totalSets > 0 && (
+                {exercisesCompleted > 0 && (
                   <text
                     x={i * 50 + 25}
                     y={barY - 4}
@@ -176,7 +182,7 @@ export default function ProgressScreen() {
                     fontSize="11"
                     fontWeight="500"
                   >
-                    {totalSets}
+                    {exercisesCompleted}/{phaseExercises.length}
                   </text>
                 )}
                 {/* Bar */}
@@ -189,7 +195,7 @@ export default function ProgressScreen() {
                   fill={
                     isToday
                       ? '#0D9488'
-                      : totalSets > 0
+                      : exercisesCompleted > 0
                       ? 'rgba(13,148,136,0.5)'
                       : '#D1D5DB'
                   }
