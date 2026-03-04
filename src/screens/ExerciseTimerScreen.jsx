@@ -44,6 +44,10 @@ export default function ExerciseTimerScreen() {
   // How many sets were already logged for this exercise today before this session started.
   // Used to avoid double-counting when the user resumes an exercise.
   const alreadyDoneRef = useRef(0)
+  // Prevents double-saving when both handleBack/handleSave and popstate fire
+  const savedRef = useRef(false)
+  // Keeps a current reference to handleBack for the popstate listener
+  const handleBackRef = useRef(null)
 
   const wakeLock = useWakeLock()
   const notification = useNotification()
@@ -181,6 +185,23 @@ export default function ExerciseTimerScreen() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [repResting])
 
+  // Intercept the Android / OS back button so that completed sets are saved.
+  // Without this, the OS back button triggers history.back() which unmounts
+  // the component before handleBack() can run, losing unsaved progress.
+  // We push a "guard" history entry on mount — when the OS back button is
+  // pressed it pops the guard (keeping us on the same URL) and fires popstate,
+  // which we catch to run the save-and-navigate logic.
+  useEffect(() => {
+    window.history.pushState({ exerciseTimerGuard: true }, '')
+
+    const onPopState = () => {
+      if (handleBackRef.current) handleBackRef.current()
+    }
+
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
   // Handle start for isometric/hybrid exercises
   const handleStart = useCallback(() => {
     holdCompletedRef.current = false  // new hold beginning — clear previous state
@@ -236,6 +257,8 @@ export default function ExerciseTimerScreen() {
 
   // Save workout and navigate back
   const handleSave = useCallback(async () => {
+    if (savedRef.current) return
+    savedRef.current = true
     const setsCompleted = (isIsometric || isHybrid)
       ? timer.currentSet
       : repSet
@@ -258,29 +281,36 @@ export default function ExerciseTimerScreen() {
     navigate('/')
   }, [id, isIsometric, isHybrid, timer.currentSet, repSet, completed, totalSets, painLevel, notes, navigate])
 
-  // Handle back navigation — auto-save partial progress
+  // Handle back navigation — auto-save partial progress.
+  // Also handles the case where the OS back button is pressed on the completion
+  // screen (all sets done but user didn't tap "Save & Back").
   const handleBack = useCallback(async () => {
+    if (savedRef.current) return
+    savedRef.current = true
     wakeLock.release()
 
-    // Calculate how many sets were fully completed in THIS session only.
-    // Subtract sets already logged earlier today so we don't double-count.
-    let completedSets = 0
-    if (isIsometric || isHybrid) {
+    let setsToLog = 0
+    if (completed) {
+      // All sets finished — log the full count (with any pain/notes already entered)
+      setsToLog = totalSets - alreadyDoneRef.current
+    } else if (isIsometric || isHybrid) {
       // Count the current set if its hold is done (resting after it, or hold completed
       // with manual rest mode leaving state as 'idle'). Don't count if mid-hold.
       const holdDone = timer.state === 'resting' || holdCompletedRef.current
-      completedSets = (holdDone ? timer.currentSet : timer.currentSet - 1) - alreadyDoneRef.current
+      setsToLog = (holdDone ? timer.currentSet : timer.currentSet - 1) - alreadyDoneRef.current
     } else if (isRepBased) {
       // repSet is the set you're currently on (1-indexed), so completed = repSet - 1
-      completedSets = (repSet - 1) - alreadyDoneRef.current
+      setsToLog = (repSet - 1) - alreadyDoneRef.current
     }
 
-    if (completedSets > 0) {
+    if (setsToLog > 0) {
       const now = Date.now()
       await logWorkout({
         date: sessionDateRef.current,
         exerciseId: id,
-        setsCompleted: completedSets,
+        setsCompleted: setsToLog,
+        painLevel: (completed && painLevel) || undefined,
+        notes: (completed && notes.trim()) || undefined,
         source: 'timer',
         startTime: sessionStartTimeRef.current || now,
         endTime: now,
@@ -288,7 +318,10 @@ export default function ExerciseTimerScreen() {
     }
 
     navigate('/')
-  }, [navigate, wakeLock, isIsometric, isHybrid, isRepBased, timer.state, timer.currentSet, repSet, id])
+  }, [navigate, wakeLock, isIsometric, isHybrid, isRepBased, timer.state, timer.currentSet, repSet, id, completed, totalSets, painLevel, notes])
+
+  // Keep the ref in sync so the popstate listener always calls the latest version
+  handleBackRef.current = handleBack
 
   // --- Not found state ---
   if (!exercise) {
