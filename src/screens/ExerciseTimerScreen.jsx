@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { exercises } from '../data/exercises'
-import { getSettings, logWorkout, getLogsForDate, updateLog } from '../db'
+import { getSettings, logWorkout, getLogsForDate, updateLog, deleteLog } from '../db'
 import { today } from '../utils/dateUtils'
 import useTimer from '../hooks/useTimer'
 import useWakeLock from '../hooks/useWakeLock'
@@ -48,6 +48,9 @@ export default function ExerciseTimerScreen() {
   const savedRef = useRef(false)
   // ID of the log entry created on auto-save so we can update it with pain/notes
   const savedLogIdRef = useRef(null)
+  // ID of a provisional log saved when the app is backgrounded mid-exercise.
+  // If the user returns, this entry is deleted so they can continue normally.
+  const backgroundSaveIdRef = useRef(null)
   // Keeps a current reference to handleBack for the popstate listener
   const handleBackRef = useRef(null)
 
@@ -170,22 +173,65 @@ export default function ExerciseTimerScreen() {
     }
   }, [])
 
-  // When the app returns to the foreground, resume the AudioContext (the browser
-  // may have suspended it while backgrounded) and resync the rep rest countdown.
+  // Ref-based helper that computes sets completed so far (same logic as handleBack).
+  // Used by the visibilitychange handler which can't rely on the useCallback closure.
+  const computeSetsRef = useRef(null)
+  computeSetsRef.current = () => {
+    if (completed) return 0 // already auto-saved by the completion effect
+    if (!sessionStartTimeRef.current) return 0 // user never pressed Start
+    if (isIsometric || isHybrid) {
+      const holdDone = timer.state === 'resting' || holdCompletedRef.current
+      return (holdDone ? timer.currentSet : timer.currentSet - 1) - alreadyDoneRef.current
+    }
+    if (isRepBased) {
+      return (repSet - 1) - alreadyDoneRef.current
+    }
+    return 0
+  }
+
+  // Save partial progress when the app is backgrounded (user presses home,
+  // switches apps, or swipes the app away). visibilitychange to "hidden" is
+  // the last event the browser guarantees before the page may be killed.
+  // If the user returns, we delete the provisional save so they can continue.
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState !== 'visible') return
-      // Best-effort AudioContext resume — works reliably on Android PWA
-      if (audioInitRef.current) initAudio()
-      // Snap the rep rest display to the correct remaining time
-      if (repResting && repRestEndTimeRef.current > 0) {
-        const newRemaining = Math.max(0, Math.ceil((repRestEndTimeRef.current - Date.now()) / 1000))
-        setRepRestRemaining(newRemaining)
+      if (document.visibilityState === 'hidden') {
+        // Provisional save — fire and forget
+        if (!savedRef.current && !backgroundSaveIdRef.current && computeSetsRef.current) {
+          const setsToLog = computeSetsRef.current()
+          if (setsToLog > 0) {
+            const now = Date.now()
+            logWorkout({
+              date: sessionDateRef.current,
+              exerciseId: id,
+              setsCompleted: setsToLog,
+              source: 'timer',
+              startTime: sessionStartTimeRef.current || now,
+              endTime: now,
+            }).then((entry) => {
+              backgroundSaveIdRef.current = entry.id
+            })
+          }
+        }
+      }
+      if (document.visibilityState === 'visible') {
+        // User came back — undo the provisional save so they can continue
+        if (backgroundSaveIdRef.current) {
+          deleteLog(backgroundSaveIdRef.current)
+          backgroundSaveIdRef.current = null
+        }
+        // Best-effort AudioContext resume — works reliably on Android PWA
+        if (audioInitRef.current) initAudio()
+        // Snap the rep rest display to the correct remaining time
+        if (repResting && repRestEndTimeRef.current > 0) {
+          const newRemaining = Math.max(0, Math.ceil((repRestEndTimeRef.current - Date.now()) / 1000))
+          setRepRestRemaining(newRemaining)
+        }
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [repResting])
+  }, [id, repResting])
 
   // Intercept the Android / OS back button so that completed sets are saved.
   // Without this, the OS back button triggers history.back() which unmounts
@@ -286,18 +332,26 @@ export default function ExerciseTimerScreen() {
       return
     }
 
-    if (savedRef.current) return
+    if (savedRef.current) {
+      navigate('/')
+      return
+    }
     savedRef.current = true
     wakeLock.release()
 
+    // If a provisional background save exists, keep it (correct set count)
+    // and just navigate. Otherwise compute and save now.
+    if (backgroundSaveIdRef.current) {
+      backgroundSaveIdRef.current = null // prevent the visible handler from deleting it
+      navigate('/')
+      return
+    }
+
     let setsToLog = 0
     if (isIsometric || isHybrid) {
-      // Count the current set if its hold is done (resting after it, or hold completed
-      // with manual rest mode leaving state as 'idle'). Don't count if mid-hold.
       const holdDone = timer.state === 'resting' || holdCompletedRef.current
       setsToLog = (holdDone ? timer.currentSet : timer.currentSet - 1) - alreadyDoneRef.current
     } else if (isRepBased) {
-      // repSet is the set you're currently on (1-indexed), so completed = repSet - 1
       setsToLog = (repSet - 1) - alreadyDoneRef.current
     }
 
