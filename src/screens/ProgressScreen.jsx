@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { exercises } from '../data/exercises'
-import { getSettings, saveSettings, getLogsInRange, getAssessments } from '../db'
+import { getSettings, getLogsInRange, getAssessments, backfillPhaseStartDate } from '../db'
 import { today, daysAgo, getWeekDates, dayOfWeek, daysBetween } from '../utils/dateUtils'
 import { evaluatePhaseReadiness } from '../utils/phaseReadiness'
 
@@ -25,11 +25,8 @@ export default function ProgressScreen() {
         ])
         if (cancelled) return
 
-        // Backfill phaseStartDate if missing
-        if (!s.phaseStartDate) {
-          s.phaseStartDate = today()
-          await saveSettings(s)
-        }
+        // Backfill phaseStartDate from earliest log if missing
+        await backfillPhaseStartDate(s)
 
         setSettings(s)
         setLogs(rangeLogs)

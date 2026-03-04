@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getSettings, saveSettings, exportAllData, importData, clearAllData } from '../db'
+import { getSettings, saveSettings, exportAllData, importData, clearAllData, backfillPhaseStartDate } from '../db'
 import { today } from '../utils/dateUtils'
 
 function Toggle({ enabled, onChange, label }) {
@@ -50,11 +50,8 @@ export default function SettingsScreen({ onDarkModeChange }) {
     async function load() {
       try {
         const s = await getSettings()
-        // Backfill phaseStartDate for existing users who don't have one
-        if (!s.phaseStartDate) {
-          s.phaseStartDate = today()
-          await saveSettings(s)
-        }
+        // Backfill phaseStartDate from earliest log if missing
+        await backfillPhaseStartDate(s)
         if (!cancelled) setSettings(s)
       } catch (err) {
         console.error('Failed to load settings:', err)
