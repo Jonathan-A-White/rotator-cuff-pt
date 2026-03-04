@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { exercises } from '../data/exercises'
-import { getSettings, logWorkout, getLogsForDate } from '../db'
+import { getSettings, logWorkout, getLogsForDate, updateLog } from '../db'
 import { today } from '../utils/dateUtils'
 import useTimer from '../hooks/useTimer'
 import useWakeLock from '../hooks/useWakeLock'
@@ -46,6 +46,8 @@ export default function ExerciseTimerScreen() {
   const alreadyDoneRef = useRef(0)
   // Prevents double-saving when both handleBack/handleSave and popstate fire
   const savedRef = useRef(false)
+  // ID of the log entry created on auto-save so we can update it with pain/notes
+  const savedLogIdRef = useRef(null)
   // Keeps a current reference to handleBack for the popstate listener
   const handleBackRef = useRef(null)
 
@@ -255,45 +257,41 @@ export default function ExerciseTimerScreen() {
     repRestEndTimeRef.current = 0
   }, [])
 
-  // Save workout and navigate back
+  // Save workout and navigate back.
+  // When the exercise is completed, the sets are already auto-saved — this
+  // just updates the record with any pain/notes the user entered.
   const handleSave = useCallback(async () => {
-    if (savedRef.current) return
-    savedRef.current = true
-    const setsCompleted = (isIsometric || isHybrid)
-      ? timer.currentSet
-      : repSet
-    // Subtract sets that were already logged in a previous session today so we
-    // only record the NEW sets performed during this session.
-    const newSets = (completed ? totalSets : setsCompleted) - alreadyDoneRef.current
-    const now = Date.now()
-    if (newSets > 0) {
-      await logWorkout({
-        date: sessionDateRef.current,
-        exerciseId: id,
-        setsCompleted: newSets,
-        painLevel: painLevel || undefined,
-        notes: notes.trim() || undefined,
-        source: 'timer',
-        startTime: sessionStartTimeRef.current || now,
-        endTime: now,
+    if (savedLogIdRef.current && (painLevel || notes.trim())) {
+      await updateLog(savedLogIdRef.current, {
+        ...(painLevel ? { painLevel } : {}),
+        ...(notes.trim() ? { notes: notes.trim() } : {}),
       })
     }
     navigate('/')
-  }, [id, isIsometric, isHybrid, timer.currentSet, repSet, completed, totalSets, painLevel, notes, navigate])
+  }, [painLevel, notes, navigate])
 
   // Handle back navigation — auto-save partial progress.
-  // Also handles the case where the OS back button is pressed on the completion
-  // screen (all sets done but user didn't tap "Save & Back").
+  // If the exercise is already completed, the auto-save effect has already
+  // persisted the sets, so we just update pain/notes and navigate.
   const handleBack = useCallback(async () => {
+    if (completed) {
+      // Sets are already saved — update with pain/notes if provided
+      if (savedLogIdRef.current && (painLevel || notes.trim())) {
+        await updateLog(savedLogIdRef.current, {
+          ...(painLevel ? { painLevel } : {}),
+          ...(notes.trim() ? { notes: notes.trim() } : {}),
+        })
+      }
+      navigate('/')
+      return
+    }
+
     if (savedRef.current) return
     savedRef.current = true
     wakeLock.release()
 
     let setsToLog = 0
-    if (completed) {
-      // All sets finished — log the full count (with any pain/notes already entered)
-      setsToLog = totalSets - alreadyDoneRef.current
-    } else if (isIsometric || isHybrid) {
+    if (isIsometric || isHybrid) {
       // Count the current set if its hold is done (resting after it, or hold completed
       // with manual rest mode leaving state as 'idle'). Don't count if mid-hold.
       const holdDone = timer.state === 'resting' || holdCompletedRef.current
@@ -309,8 +307,6 @@ export default function ExerciseTimerScreen() {
         date: sessionDateRef.current,
         exerciseId: id,
         setsCompleted: setsToLog,
-        painLevel: (completed && painLevel) || undefined,
-        notes: (completed && notes.trim()) || undefined,
         source: 'timer',
         startTime: sessionStartTimeRef.current || now,
         endTime: now,
@@ -318,7 +314,28 @@ export default function ExerciseTimerScreen() {
     }
 
     navigate('/')
-  }, [navigate, wakeLock, isIsometric, isHybrid, isRepBased, timer.state, timer.currentSet, repSet, id, completed, totalSets, painLevel, notes])
+  }, [navigate, wakeLock, isIsometric, isHybrid, isRepBased, timer.state, timer.currentSet, repSet, id, completed, painLevel, notes])
+
+  // Auto-save the workout immediately when the exercise completes so that
+  // closing the app without tapping "Save & Back" doesn't lose the sets.
+  useEffect(() => {
+    if (!completed || savedRef.current) return
+    savedRef.current = true
+    const newSets = totalSets - alreadyDoneRef.current
+    if (newSets > 0) {
+      const now = Date.now()
+      logWorkout({
+        date: sessionDateRef.current,
+        exerciseId: id,
+        setsCompleted: newSets,
+        source: 'timer',
+        startTime: sessionStartTimeRef.current || now,
+        endTime: now,
+      }).then((entry) => {
+        savedLogIdRef.current = entry.id
+      })
+    }
+  }, [completed, id, totalSets])
 
   // Keep the ref in sync so the popstate listener always calls the latest version
   handleBackRef.current = handleBack
