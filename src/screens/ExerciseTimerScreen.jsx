@@ -41,6 +41,9 @@ export default function ExerciseTimerScreen() {
   // sets when autoStartRest=false leaves state as 'idle' after a finished hold)
   const holdCompletedRef = useRef(false)
   const prevCurrentSetRef = useRef(1)
+  // How many sets were already logged for this exercise today before this session started.
+  // Used to avoid double-counting when the user resumes an exercise.
+  const alreadyDoneRef = useRef(0)
 
   const wakeLock = useWakeLock()
   const notification = useNotification()
@@ -57,6 +60,7 @@ export default function ExerciseTimerScreen() {
       const alreadyDone = logs
         .filter((l) => l.exerciseId === id)
         .reduce((sum, l) => sum + (l.setsCompleted || 0), 0)
+      alreadyDoneRef.current = alreadyDone
       if (alreadyDone > 0) {
         const startSet = Math.min(alreadyDone + 1, totalSets)
         timer.setInitialSet(startSet)
@@ -235,17 +239,22 @@ export default function ExerciseTimerScreen() {
     const setsCompleted = (isIsometric || isHybrid)
       ? timer.currentSet
       : repSet
+    // Subtract sets that were already logged in a previous session today so we
+    // only record the NEW sets performed during this session.
+    const newSets = (completed ? totalSets : setsCompleted) - alreadyDoneRef.current
     const now = Date.now()
-    await logWorkout({
-      date: sessionDateRef.current,
-      exerciseId: id,
-      setsCompleted: completed ? totalSets : setsCompleted,
-      painLevel: painLevel || undefined,
-      notes: notes.trim() || undefined,
-      source: 'timer',
-      startTime: sessionStartTimeRef.current || now,
-      endTime: now,
-    })
+    if (newSets > 0) {
+      await logWorkout({
+        date: sessionDateRef.current,
+        exerciseId: id,
+        setsCompleted: newSets,
+        painLevel: painLevel || undefined,
+        notes: notes.trim() || undefined,
+        source: 'timer',
+        startTime: sessionStartTimeRef.current || now,
+        endTime: now,
+      })
+    }
     navigate('/')
   }, [id, isIsometric, isHybrid, timer.currentSet, repSet, completed, totalSets, painLevel, notes, navigate])
 
@@ -253,16 +262,17 @@ export default function ExerciseTimerScreen() {
   const handleBack = useCallback(async () => {
     wakeLock.release()
 
-    // Calculate how many sets were fully completed
+    // Calculate how many sets were fully completed in THIS session only.
+    // Subtract sets already logged earlier today so we don't double-count.
     let completedSets = 0
     if (isIsometric || isHybrid) {
       // Count the current set if its hold is done (resting after it, or hold completed
       // with manual rest mode leaving state as 'idle'). Don't count if mid-hold.
       const holdDone = timer.state === 'resting' || holdCompletedRef.current
-      completedSets = holdDone ? timer.currentSet : timer.currentSet - 1
+      completedSets = (holdDone ? timer.currentSet : timer.currentSet - 1) - alreadyDoneRef.current
     } else if (isRepBased) {
       // repSet is the set you're currently on (1-indexed), so completed = repSet - 1
-      completedSets = repSet - 1
+      completedSets = (repSet - 1) - alreadyDoneRef.current
     }
 
     if (completedSets > 0) {
