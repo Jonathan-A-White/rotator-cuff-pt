@@ -5,6 +5,7 @@ const DB_VERSION = 1;
 
 const DEFAULT_SETTINGS = {
   currentPhase: 1,
+  phaseStartDate: null, // ISO date string when current phase began
   exerciseOrder: [],
   timerSound: true,
   timerVibrate: true,
@@ -109,6 +110,31 @@ export async function getLogsInRange(startDate, endDate) {
 export async function getAllLogs() {
   const db = await getDB();
   return db.getAll("workoutLogs");
+}
+
+/**
+ * If phaseStartDate is missing from settings, infer it from the earliest
+ * workout log date. Falls back to today if there are no logs.
+ * Returns the (possibly updated) settings object.
+ */
+export async function backfillPhaseStartDate(settings) {
+  if (settings.phaseStartDate) return settings;
+
+  const db = await getDB();
+  const allLogs = await db.getAll("workoutLogs");
+
+  let earliest = null;
+  for (const log of allLogs) {
+    if (log.date && (!earliest || log.date < earliest)) {
+      earliest = log.date;
+    }
+  }
+
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  settings.phaseStartDate = earliest || todayStr;
+  await saveSettings(settings);
+  return settings;
 }
 
 /**

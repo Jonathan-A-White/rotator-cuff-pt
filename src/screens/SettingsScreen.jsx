@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getSettings, saveSettings, exportAllData, importData, clearAllData } from '../db'
+import { getSettings, saveSettings, exportAllData, importData, clearAllData, backfillPhaseStartDate } from '../db'
+import { today } from '../utils/dateUtils'
 
 function Toggle({ enabled, onChange, label }) {
   return (
@@ -49,6 +50,8 @@ export default function SettingsScreen({ onDarkModeChange }) {
     async function load() {
       try {
         const s = await getSettings()
+        // Backfill phaseStartDate from earliest log if missing
+        await backfillPhaseStartDate(s)
         if (!cancelled) setSettings(s)
       } catch (err) {
         console.error('Failed to load settings:', err)
@@ -68,7 +71,9 @@ export default function SettingsScreen({ onDarkModeChange }) {
 
   async function handlePhaseChange(phase) {
     setShowPhaseConfirm(null)
-    await updateSetting('currentPhase', phase)
+    const updated = { ...settings, currentPhase: phase, phaseStartDate: today() }
+    setSettings(updated)
+    await saveSettings(updated)
   }
 
   async function handleNotificationToggle(enabled) {
