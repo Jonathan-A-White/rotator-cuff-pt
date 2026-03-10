@@ -305,6 +305,14 @@ export function validateImportData(data) {
     return { valid: false, reason: "File does not contain valid JSON data." };
   }
 
+  // Check version compatibility — reject exports from newer DB versions
+  if (data.version != null && data.version > DB_VERSION) {
+    return {
+      valid: false,
+      reason: `This backup is from a newer app version (v${data.version}). Please update the app before importing.`,
+    };
+  }
+
   // Must have at least one data array present
   const storeKeys = ["workoutLogs", "assessments", "settings", "checklist"];
   const hasAnyData = storeKeys.some(
@@ -362,7 +370,32 @@ export function validateImportData(data) {
   return { valid: true };
 }
 
+/**
+ * Migrate export data from an older version to the current version.
+ * Each migration step transforms the data shape forward by one version.
+ * Returns the migrated data object (does not mutate the original).
+ */
+export function migrateImportData(data) {
+  let migrated = { ...data };
+  const fromVersion = migrated.version || 1;
+
+  // Future migrations go here, e.g.:
+  // if (fromVersion < 2) {
+  //   migrated.workoutLogs = (migrated.workoutLogs || []).map(log => ({
+  //     ...log,
+  //     newField: log.oldField ?? defaultValue,
+  //   }));
+  //   migrated.version = 2;
+  // }
+
+  migrated.version = DB_VERSION;
+  return migrated;
+}
+
 export async function importData(data) {
+  // Migrate old exports to the current schema before importing
+  const migrated = migrateImportData(data);
+
   const db = await getDB();
 
   // Back up current data before clearing, so we can restore on failure
@@ -385,10 +418,10 @@ export async function importData(data) {
       (records || []).map((record) => tx.objectStore(storeName).put(record));
 
     await Promise.all([
-      ...putAll("workoutLogs", data.workoutLogs),
-      ...putAll("assessments", data.assessments),
-      ...putAll("settings", data.settings),
-      ...putAll("checklist", data.checklist),
+      ...putAll("workoutLogs", migrated.workoutLogs),
+      ...putAll("assessments", migrated.assessments),
+      ...putAll("settings", migrated.settings),
+      ...putAll("checklist", migrated.checklist),
       tx.done,
     ]);
   } catch (err) {
