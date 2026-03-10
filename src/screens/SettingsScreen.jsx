@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getSettings, saveSettings, exportAllData, importData, validateImportData, clearAllData, backfillPhaseStartDate } from '../db'
 import { today } from '../utils/dateUtils'
@@ -46,6 +46,7 @@ export default function SettingsScreen({ onDarkModeChange }) {
   const [showImportConfirm, setShowImportConfirm] = useState(null) // { data, fileName } or null
   const [importStatus, setImportStatus] = useState(null) // { type: 'success'|'error', message: string } | null
   const [exportStatus, setExportStatus] = useState(null) // 'success' | 'error' | null
+  const exportCacheRef = useRef(null)
 
   useEffect(() => {
     let cancelled = false
@@ -62,6 +63,8 @@ export default function SettingsScreen({ onDarkModeChange }) {
       }
     }
     load()
+    // Pre-cache export data so Share can call navigator.share() synchronously
+    exportAllData().then(data => { exportCacheRef.current = data })
     return () => { cancelled = true }
   }, [])
 
@@ -107,12 +110,10 @@ export default function SettingsScreen({ onDarkModeChange }) {
     URL.revokeObjectURL(url)
   }
 
-  async function handleExportShare() {
-    const data = await exportAllData()
+  function buildShareFile(data) {
     const json = JSON.stringify(data, null, 2)
     const fileName = `rcpt-backup-${new Date().toISOString().split('T')[0]}.json`
-    const file = new File([json], fileName, { type: 'application/json' })
-    await navigator.share({ title: 'Rotator Cuff PT Backup', files: [file] })
+    return new File([json], fileName, { type: 'application/json' })
   }
 
   async function handleExport() {
@@ -129,23 +130,21 @@ export default function SettingsScreen({ onDarkModeChange }) {
 
   async function handleShareExport() {
     try {
-      await handleExportShare()
+      // Use cached data so navigator.share() is called without prior awaits,
+      // preserving the browser's transient user-activation from the tap.
+      const data = exportCacheRef.current || await exportAllData()
+      const file = buildShareFile(data)
+      await navigator.share({ title: 'Rotator Cuff PT Backup', files: [file] })
       setExportStatus('success')
       setTimeout(() => setExportStatus(null), 3000)
+      // Refresh cache for next time
+      exportAllData().then(d => { exportCacheRef.current = d })
     } catch (err) {
       // User cancelled the share sheet — not an error
       if (err.name === 'AbortError') return
-      console.warn('Share export failed, falling back to download:', err)
-      // Fall back to regular file download
-      try {
-        await handleExportDownload()
-        setExportStatus('success')
-        setTimeout(() => setExportStatus(null), 3000)
-      } catch (downloadErr) {
-        console.error('Download fallback also failed:', downloadErr)
-        setExportStatus('error')
-        setTimeout(() => setExportStatus(null), 3000)
-      }
+      console.error('Share export failed:', err)
+      setExportStatus('error')
+      setTimeout(() => setExportStatus(null), 3000)
     }
   }
 
