@@ -45,7 +45,7 @@ export default function SettingsScreen({ onDarkModeChange }) {
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [showImportConfirm, setShowImportConfirm] = useState(null) // { data, fileName } or null
   const [importStatus, setImportStatus] = useState(null) // { type: 'success'|'error', message: string } | null
-  const [exportStatus, setExportStatus] = useState(null) // 'success' | 'error' | null
+  const [exportStatus, setExportStatus] = useState(null) // 'success' | { error: string } | null
   const exportCacheRef = useRef(null)
 
   useEffect(() => {
@@ -113,7 +113,9 @@ export default function SettingsScreen({ onDarkModeChange }) {
   function buildShareFile(data) {
     const json = JSON.stringify(data, null, 2)
     const fileName = `rcpt-backup-${new Date().toISOString().split('T')[0]}.json`
-    return new File([json], fileName, { type: 'application/json' })
+    // Create via Blob first — some Android browsers handle this better
+    const blob = new Blob([json], { type: 'application/json' })
+    return new File([blob], fileName, { type: 'application/json' })
   }
 
   async function handleExport() {
@@ -134,7 +136,7 @@ export default function SettingsScreen({ onDarkModeChange }) {
       // preserving the browser's transient user-activation from the tap.
       const data = exportCacheRef.current || await exportAllData()
       const file = buildShareFile(data)
-      await navigator.share({ title: 'Rotator Cuff PT Backup', files: [file] })
+      await navigator.share({ files: [file] })
       setExportStatus('success')
       setTimeout(() => setExportStatus(null), 3000)
       // Refresh cache for next time
@@ -143,8 +145,8 @@ export default function SettingsScreen({ onDarkModeChange }) {
       // User cancelled the share sheet — not an error
       if (err.name === 'AbortError') return
       console.error('Share export failed:', err)
-      setExportStatus('error')
-      setTimeout(() => setExportStatus(null), 3000)
+      setExportStatus({ error: `${err.name}: ${err.message}` })
+      setTimeout(() => setExportStatus(null), 8000)
     }
   }
 
@@ -437,6 +439,9 @@ export default function SettingsScreen({ onDarkModeChange }) {
 
         {exportStatus === 'success' && (
           <p className="text-sm text-green-600 dark:text-green-400 text-center">Data exported successfully.</p>
+        )}
+        {exportStatus?.error && (
+          <p className="text-sm text-red dark:text-red-400 text-center">Share failed: {exportStatus.error}</p>
         )}
         {exportStatus === 'error' && (
           <p className="text-sm text-red dark:text-red-400 text-center">Export failed. Please try again.</p>
