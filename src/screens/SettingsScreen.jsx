@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Capacitor } from '@capacitor/core'
+import { Share } from '@capacitor/share'
+import { Filesystem, Directory } from '@capacitor/filesystem'
 import { getSettings, saveSettings, exportAllData, importData, validateImportData, clearAllData, backfillPhaseStartDate } from '../db'
 import { today } from '../utils/dateUtils'
 
@@ -110,14 +113,6 @@ export default function SettingsScreen({ onDarkModeChange }) {
     URL.revokeObjectURL(url)
   }
 
-  function buildShareFile(data) {
-    const json = JSON.stringify(data, null, 2)
-    const fileName = `rcpt-backup-${new Date().toISOString().split('T')[0]}.json`
-    // Create via Blob first — some Android browsers handle this better
-    const blob = new Blob([json], { type: 'application/json' })
-    return new File([blob], fileName, { type: 'application/json' })
-  }
-
   async function handleExport() {
     try {
       await handleExportDownload()
@@ -130,28 +125,41 @@ export default function SettingsScreen({ onDarkModeChange }) {
     }
   }
 
-  function handleShareExport() {
-    // Must be a plain (non-async) function so navigator.share() runs
-    // in the original click microtask — Android Chrome revokes the
-    // transient user-activation if the call site is an async function.
-    const data = exportCacheRef.current
-    if (!data) {
-      // Cache not ready yet — very unlikely but fall back to download
-      handleExport()
-      return
-    }
-    const file = buildShareFile(data)
-    navigator.share({ files: [file] }).then(() => {
+  async function handleShareExport() {
+    try {
+      const data = exportCacheRef.current || await exportAllData()
+      const json = JSON.stringify(data, null, 2)
+      const fileName = `rcpt-backup-${new Date().toISOString().split('T')[0]}.json`
+
+      if (Capacitor.isNativePlatform()) {
+        // Write to cache dir, then share the native file URI
+        const written = await Filesystem.writeFile({
+          path: fileName,
+          data: json,
+          directory: Directory.Cache,
+        })
+        await Share.share({
+          title: 'Rotator Cuff PT Backup',
+          files: [written.uri],
+          dialogTitle: 'Save backup to…',
+        })
+      } else {
+        // PWA fallback — Web Share API
+        const blob = new Blob([json], { type: 'application/json' })
+        const file = new File([blob], fileName, { type: 'application/json' })
+        await navigator.share({ files: [file] })
+      }
+
       setExportStatus('success')
       setTimeout(() => setExportStatus(null), 3000)
       // Refresh cache for next time
       exportAllData().then(d => { exportCacheRef.current = d })
-    }).catch(err => {
+    } catch (err) {
       if (err.name === 'AbortError') return
       console.error('Share export failed:', err)
       setExportStatus({ error: `${err.name}: ${err.message}` })
       setTimeout(() => setExportStatus(null), 8000)
-    })
+    }
   }
 
   function handleImportClick() {
@@ -414,7 +422,7 @@ export default function SettingsScreen({ onDarkModeChange }) {
           Export Data
         </button>
 
-        {typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [new File([''], 'test.json', { type: 'application/json' })] }) && (
+        {(Capacitor.isNativePlatform() || (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [new File([''], 'test.json', { type: 'application/json' })] }))) && (
           <button
             onClick={handleShareExport}
             className="w-full min-h-[48px] rounded-xl text-sm font-semibold bg-gray-100 dark:bg-[#1C1C1E] text-gray-700 dark:text-gray-300 border border-[#E5E5E5] dark:border-[#3A3A3C] transition-colors flex items-center justify-center gap-2"
