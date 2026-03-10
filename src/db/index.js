@@ -296,32 +296,118 @@ export async function exportAllData() {
   };
 }
 
+/**
+ * Validate that imported data has the expected shape.
+ * Returns { valid: true } or { valid: false, reason: string }.
+ */
+export function validateImportData(data) {
+  if (!data || typeof data !== "object") {
+    return { valid: false, reason: "File does not contain valid JSON data." };
+  }
+
+  // Must have at least one data array present
+  const storeKeys = ["workoutLogs", "assessments", "settings", "checklist"];
+  const hasAnyData = storeKeys.some(
+    (key) => Array.isArray(data[key]) && data[key].length > 0,
+  );
+  if (!hasAnyData) {
+    return {
+      valid: false,
+      reason: "No recognizable data found (workoutLogs, assessments, settings, or checklist).",
+    };
+  }
+
+  // Each present key must be an array
+  for (const key of storeKeys) {
+    if (data[key] !== undefined && !Array.isArray(data[key])) {
+      return {
+        valid: false,
+        reason: `"${key}" must be an array, got ${typeof data[key]}.`,
+      };
+    }
+  }
+
+  // Validate workout log entries have required fields
+  if (Array.isArray(data.workoutLogs)) {
+    for (let i = 0; i < data.workoutLogs.length; i++) {
+      const log = data.workoutLogs[i];
+      if (!log || typeof log !== "object") {
+        return { valid: false, reason: `workoutLogs[${i}] is not an object.` };
+      }
+      if (!log.id || !log.date || !log.exerciseId) {
+        return {
+          valid: false,
+          reason: `workoutLogs[${i}] is missing required fields (id, date, or exerciseId).`,
+        };
+      }
+    }
+  }
+
+  // Validate assessment entries have required fields
+  if (Array.isArray(data.assessments)) {
+    for (let i = 0; i < data.assessments.length; i++) {
+      const a = data.assessments[i];
+      if (!a || typeof a !== "object") {
+        return { valid: false, reason: `assessments[${i}] is not an object.` };
+      }
+      if (!a.id || !a.date) {
+        return {
+          valid: false,
+          reason: `assessments[${i}] is missing required fields (id or date).`,
+        };
+      }
+    }
+  }
+
+  return { valid: true };
+}
+
 export async function importData(data) {
   const db = await getDB();
-  const tx = db.transaction(
-    ["workoutLogs", "assessments", "settings", "checklist"],
-    "readwrite",
-  );
 
-  // Clear all stores first
-  await Promise.all([
-    tx.objectStore("workoutLogs").clear(),
-    tx.objectStore("assessments").clear(),
-    tx.objectStore("settings").clear(),
-    tx.objectStore("checklist").clear(),
-  ]);
+  // Back up current data before clearing, so we can restore on failure
+  const storeNames = ["workoutLogs", "assessments", "settings", "checklist"];
+  const backup = {};
+  for (const name of storeNames) {
+    backup[name] = await db.getAll(name);
+  }
 
-  // Import data into each store
-  const putAll = (storeName, records) =>
-    (records || []).map((record) => tx.objectStore(storeName).put(record));
+  const tx = db.transaction(storeNames, "readwrite");
 
-  await Promise.all([
-    ...putAll("workoutLogs", data.workoutLogs),
-    ...putAll("assessments", data.assessments),
-    ...putAll("settings", data.settings),
-    ...putAll("checklist", data.checklist),
-    tx.done,
-  ]);
+  try {
+    // Clear all stores first
+    await Promise.all(
+      storeNames.map((name) => tx.objectStore(name).clear()),
+    );
+
+    // Import data into each store
+    const putAll = (storeName, records) =>
+      (records || []).map((record) => tx.objectStore(storeName).put(record));
+
+    await Promise.all([
+      ...putAll("workoutLogs", data.workoutLogs),
+      ...putAll("assessments", data.assessments),
+      ...putAll("settings", data.settings),
+      ...putAll("checklist", data.checklist),
+      tx.done,
+    ]);
+  } catch (err) {
+    // Attempt to restore from backup
+    try {
+      const restoreTx = db.transaction(storeNames, "readwrite");
+      for (const name of storeNames) {
+        const store = restoreTx.objectStore(name);
+        await store.clear();
+        for (const record of backup[name]) {
+          await store.put(record);
+        }
+      }
+      await restoreTx.done;
+    } catch {
+      // Restore failed — nothing more we can do
+    }
+    throw err;
+  }
 }
 
 export async function clearAllData() {
