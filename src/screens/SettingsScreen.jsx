@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getSettings, saveSettings, exportAllData, importData, validateImportData, clearAllData, backfillPhaseStartDate } from '../db'
 import { today } from '../utils/dateUtils'
@@ -45,8 +45,7 @@ export default function SettingsScreen({ onDarkModeChange }) {
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [showImportConfirm, setShowImportConfirm] = useState(null) // { data, fileName } or null
   const [importStatus, setImportStatus] = useState(null) // { type: 'success'|'error', message: string } | null
-  const [exportStatus, setExportStatus] = useState(null) // 'success' | { error: string } | null
-  const exportCacheRef = useRef(null)
+  const [exportStatus, setExportStatus] = useState(null) // 'success' | 'error' | null
 
   useEffect(() => {
     let cancelled = false
@@ -63,8 +62,6 @@ export default function SettingsScreen({ onDarkModeChange }) {
       }
     }
     load()
-    // Pre-cache export data so Share can call navigator.share() synchronously
-    exportAllData().then(data => { exportCacheRef.current = data })
     return () => { cancelled = true }
   }, [])
 
@@ -96,61 +93,25 @@ export default function SettingsScreen({ onDarkModeChange }) {
     if (onDarkModeChange) onDarkModeChange(mode)
   }
 
-  async function handleExportDownload() {
-    const data = await exportAllData()
-    const json = JSON.stringify(data, null, 2)
-    const blob = new Blob([json], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `rcpt-backup-${new Date().toISOString().split('T')[0]}.json`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
-
   async function handleExport() {
     try {
-      await handleExportDownload()
-      setExportStatus('success')
-      setTimeout(() => setExportStatus(null), 3000)
-    } catch (err) {
-      console.error('Export failed:', err)
-      setExportStatus('error')
-      setTimeout(() => setExportStatus(null), 3000)
-    }
-  }
-
-  async function nativeShare(json, fileName) {
-    const { Capacitor } = await import('@capacitor/core')
-    if (!Capacitor.isNativePlatform()) return false
-    const { Filesystem, Directory } = await import('@capacitor/filesystem')
-    const { Share } = await import('@capacitor/share')
-    const written = await Filesystem.writeFile({
-      path: fileName,
-      data: json,
-      directory: Directory.Cache,
-    })
-    await Share.share({
-      title: 'Rotator Cuff PT Backup',
-      files: [written.uri],
-      dialogTitle: 'Save backup to…',
-    })
-    return true
-  }
-
-  async function handleShareExport() {
-    try {
-      const data = exportCacheRef.current || await exportAllData()
+      const data = await exportAllData()
       const json = JSON.stringify(data, null, 2)
+      const blob = new Blob([json], { type: 'application/json' })
       const fileName = `rcpt-backup-${new Date().toISOString().split('T')[0]}.json`
 
-      // Try native Capacitor share first (APK builds)
-      const shared = await nativeShare(json, fileName).catch(() => false)
-      if (!shared) {
-        // PWA path — download and show instructions
-        const blob = new Blob([json], { type: 'application/json' })
+      // Use File System Access API when available — on Android Chrome 132+
+      // the save picker shows Google Drive and other storage providers.
+      if (window.showSaveFilePicker) {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: fileName,
+          types: [{ description: 'JSON backup', accept: { 'application/json': ['.json'] } }],
+        })
+        const writable = await handle.createWritable()
+        await writable.write(blob)
+        await writable.close()
+      } else {
+        // Fallback for older browsers — plain download
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
@@ -159,19 +120,13 @@ export default function SettingsScreen({ onDarkModeChange }) {
         a.click()
         document.body.removeChild(a)
         URL.revokeObjectURL(url)
-        setExportStatus('shared')
-        setTimeout(() => setExportStatus(null), 10000)
-        // Refresh cache for next time
-        exportAllData().then(d => { exportCacheRef.current = d })
-        return
       }
 
       setExportStatus('success')
       setTimeout(() => setExportStatus(null), 3000)
-      exportAllData().then(d => { exportCacheRef.current = d })
     } catch (err) {
       if (err.name === 'AbortError') return
-      console.error('Share export failed:', err)
+      console.error('Export failed:', err)
       setExportStatus('error')
       setTimeout(() => setExportStatus(null), 3000)
     }
@@ -438,20 +393,6 @@ export default function SettingsScreen({ onDarkModeChange }) {
         </button>
 
         <button
-          onClick={handleShareExport}
-          className="w-full min-h-[48px] rounded-xl text-sm font-semibold bg-gray-100 dark:bg-[#1C1C1E] text-gray-700 dark:text-gray-300 border border-[#E5E5E5] dark:border-[#3A3A3C] transition-colors flex items-center justify-center gap-2"
-        >
-          <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="18" cy="5" r="3" />
-            <circle cx="6" cy="12" r="3" />
-            <circle cx="18" cy="19" r="3" />
-            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-          </svg>
-          Share to Google Drive / Cloud
-        </button>
-
-        <button
           onClick={handleImportClick}
           className="w-full min-h-[48px] rounded-xl text-sm font-semibold bg-gray-100 dark:bg-[#1C1C1E] text-gray-700 dark:text-gray-300 border border-[#E5E5E5] dark:border-[#3A3A3C] transition-colors"
         >
@@ -459,16 +400,11 @@ export default function SettingsScreen({ onDarkModeChange }) {
         </button>
 
         <p className="text-xs text-muted dark:text-muted-dark text-center">
-          To import from Google Drive, tap Import Data — on Android you can browse Drive directly from the file picker.
+          You can save exports directly to Google Drive from the file picker. To import from Drive, tap Import Data and browse Drive from the picker.
         </p>
 
         {exportStatus === 'success' && (
           <p className="text-sm text-green-600 dark:text-green-400 text-center">Data exported successfully.</p>
-        )}
-        {exportStatus === 'shared' && (
-          <p className="text-sm text-teal dark:text-teal-400 text-center">
-            Backup saved to Downloads! To upload to Google Drive: open your Files app → find <strong>rcpt-backup…json</strong> → tap Share → choose Google Drive.
-          </p>
         )}
         {exportStatus === 'error' && (
           <p className="text-sm text-red dark:text-red-400 text-center">Export failed. Please try again.</p>
