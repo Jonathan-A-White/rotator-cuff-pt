@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getSettings, saveSettings, exportAllData, importData, clearAllData, backfillPhaseStartDate } from '../db'
+import { getSettings, saveSettings, exportAllData, importData, validateImportData, clearAllData, backfillPhaseStartDate } from '../db'
 import { today } from '../utils/dateUtils'
 
 function Toggle({ enabled, onChange, label }) {
@@ -43,7 +43,9 @@ export default function SettingsScreen({ onDarkModeChange }) {
   const [loading, setLoading] = useState(true)
   const [showPhaseConfirm, setShowPhaseConfirm] = useState(null) // phase number or null
   const [showClearConfirm, setShowClearConfirm] = useState(false)
-  const [importStatus, setImportStatus] = useState(null) // 'success' | 'error' | null
+  const [showImportConfirm, setShowImportConfirm] = useState(null) // { data, fileName } or null
+  const [importStatus, setImportStatus] = useState(null) // { type: 'success'|'error', message: string } | null
+  const [exportStatus, setExportStatus] = useState(null) // 'success' | 'error' | null
 
   useEffect(() => {
     let cancelled = false
@@ -104,8 +106,12 @@ export default function SettingsScreen({ onDarkModeChange }) {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+      setExportStatus('success')
+      setTimeout(() => setExportStatus(null), 3000)
     } catch (err) {
       console.error('Export failed:', err)
+      setExportStatus('error')
+      setTimeout(() => setExportStatus(null), 3000)
     }
   }
 
@@ -118,21 +124,48 @@ export default function SettingsScreen({ onDarkModeChange }) {
       if (!file) return
       try {
         const text = await file.text()
-        const data = JSON.parse(text)
-        await importData(data)
-        setImportStatus('success')
-        // Reload settings after import
-        const s = await getSettings()
-        setSettings(s)
-        if (onDarkModeChange && s.darkMode) onDarkModeChange(s.darkMode)
-        setTimeout(() => setImportStatus(null), 3000)
+        let data
+        try {
+          data = JSON.parse(text)
+        } catch {
+          setImportStatus({ type: 'error', message: 'File is not valid JSON.' })
+          setTimeout(() => setImportStatus(null), 5000)
+          return
+        }
+        const validation = validateImportData(data)
+        if (!validation.valid) {
+          setImportStatus({ type: 'error', message: validation.reason })
+          setTimeout(() => setImportStatus(null), 5000)
+          return
+        }
+        // Show confirmation dialog with summary
+        setShowImportConfirm({ data, fileName: file.name })
       } catch (err) {
         console.error('Import failed:', err)
-        setImportStatus('error')
-        setTimeout(() => setImportStatus(null), 3000)
+        setImportStatus({ type: 'error', message: 'Failed to read the file.' })
+        setTimeout(() => setImportStatus(null), 5000)
       }
     }
     input.click()
+  }
+
+  async function handleImportConfirm() {
+    const { data } = showImportConfirm
+    setShowImportConfirm(null)
+    try {
+      await importData(data)
+      setImportStatus({ type: 'success', message: 'Data imported successfully.' })
+      // Reload settings after import
+      const s = await getSettings()
+      await backfillPhaseStartDate(s)
+      setSettings(s)
+      if (onDarkModeChange && s.darkMode) onDarkModeChange(s.darkMode)
+      setTimeout(() => setImportStatus(null), 3000)
+    } catch (err) {
+      console.error('Import failed:', err)
+      setImportStatus({ type: 'error', message: 'Import failed. Your previous data has been restored.' })
+      setTimeout(() => setImportStatus(null), 5000)
+    }
   }
 
   async function handleClearAll() {
@@ -215,6 +248,43 @@ export default function SettingsScreen({ onDarkModeChange }) {
                 className="flex-1 min-h-[48px] rounded-xl text-sm font-semibold bg-teal text-white"
               >
                 Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import confirmation dialog */}
+      {showImportConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-[#2C2C2E] rounded-2xl p-6 max-w-sm w-full shadow-xl">
+            <h3 className="text-lg font-bold mb-2 dark:text-white">Import Data?</h3>
+            <p className="text-sm text-muted dark:text-muted-dark mb-3">
+              This will replace all your current data with the contents of <strong className="dark:text-white">{showImportConfirm.fileName}</strong>.
+            </p>
+            <div className="text-xs text-muted dark:text-muted-dark mb-4 space-y-1">
+              <p>{(showImportConfirm.data.workoutLogs || []).length} workout logs</p>
+              <p>{(showImportConfirm.data.assessments || []).length} assessments</p>
+              <p>{(showImportConfirm.data.checklist || []).length} checklist items</p>
+              {showImportConfirm.data.exportedAt && (
+                <p>Exported: {new Date(showImportConfirm.data.exportedAt).toLocaleDateString()}</p>
+              )}
+            </div>
+            <p className="text-xs text-amber-600 dark:text-amber-400 mb-6">
+              Your current data will be backed up automatically. If the import fails, it will be restored.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowImportConfirm(null)}
+                className="flex-1 min-h-[48px] rounded-xl text-sm font-semibold bg-gray-100 dark:bg-[#1C1C1E] text-gray-700 dark:text-gray-300 border border-[#E5E5E5] dark:border-[#3A3A3C]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImportConfirm}
+                className="flex-1 min-h-[48px] rounded-xl text-sm font-semibold bg-teal text-white"
+              >
+                Import
               </button>
             </div>
           </div>
@@ -312,11 +382,18 @@ export default function SettingsScreen({ onDarkModeChange }) {
           Import Data
         </button>
 
-        {importStatus === 'success' && (
-          <p className="text-sm text-green-600 dark:text-green-400 text-center">Data imported successfully.</p>
+        {exportStatus === 'success' && (
+          <p className="text-sm text-green-600 dark:text-green-400 text-center">Data exported successfully.</p>
         )}
-        {importStatus === 'error' && (
-          <p className="text-sm text-red dark:text-red-400 text-center">Import failed. Check the file format.</p>
+        {exportStatus === 'error' && (
+          <p className="text-sm text-red dark:text-red-400 text-center">Export failed. Please try again.</p>
+        )}
+
+        {importStatus?.type === 'success' && (
+          <p className="text-sm text-green-600 dark:text-green-400 text-center">{importStatus.message}</p>
+        )}
+        {importStatus?.type === 'error' && (
+          <p className="text-sm text-red dark:text-red-400 text-center">{importStatus.message}</p>
         )}
 
         <button
