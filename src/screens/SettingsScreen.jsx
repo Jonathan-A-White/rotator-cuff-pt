@@ -130,24 +130,28 @@ export default function SettingsScreen({ onDarkModeChange }) {
     }
   }
 
-  async function handleShareExport() {
-    try {
-      // Use cached data so navigator.share() is called without prior awaits,
-      // preserving the browser's transient user-activation from the tap.
-      const data = exportCacheRef.current || await exportAllData()
-      const file = buildShareFile(data)
-      await navigator.share({ files: [file] })
+  function handleShareExport() {
+    // Must be a plain (non-async) function so navigator.share() runs
+    // in the original click microtask — Android Chrome revokes the
+    // transient user-activation if the call site is an async function.
+    const data = exportCacheRef.current
+    if (!data) {
+      // Cache not ready yet — very unlikely but fall back to download
+      handleExport()
+      return
+    }
+    const file = buildShareFile(data)
+    navigator.share({ files: [file] }).then(() => {
       setExportStatus('success')
       setTimeout(() => setExportStatus(null), 3000)
       // Refresh cache for next time
       exportAllData().then(d => { exportCacheRef.current = d })
-    } catch (err) {
-      // User cancelled the share sheet — not an error
+    }).catch(err => {
       if (err.name === 'AbortError') return
       console.error('Share export failed:', err)
       setExportStatus({ error: `${err.name}: ${err.message}` })
       setTimeout(() => setExportStatus(null), 8000)
-    }
+    })
   }
 
   function handleImportClick() {
