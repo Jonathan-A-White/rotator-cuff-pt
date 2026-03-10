@@ -112,7 +112,7 @@ export default function SettingsScreen({ onDarkModeChange }) {
     const json = JSON.stringify(data, null, 2)
     const fileName = `rcpt-backup-${new Date().toISOString().split('T')[0]}.json`
     const file = new File([json], fileName, { type: 'application/json' })
-    await navigator.share({ files: [file] })
+    await navigator.share({ title: 'Rotator Cuff PT Backup', files: [file] })
   }
 
   async function handleExport() {
@@ -135,9 +135,17 @@ export default function SettingsScreen({ onDarkModeChange }) {
     } catch (err) {
       // User cancelled the share sheet — not an error
       if (err.name === 'AbortError') return
-      console.error('Share export failed:', err)
-      setExportStatus('error')
-      setTimeout(() => setExportStatus(null), 3000)
+      console.warn('Share export failed, falling back to download:', err)
+      // Fall back to regular file download
+      try {
+        await handleExportDownload()
+        setExportStatus('success')
+        setTimeout(() => setExportStatus(null), 3000)
+      } catch (downloadErr) {
+        console.error('Download fallback also failed:', downloadErr)
+        setExportStatus('error')
+        setTimeout(() => setExportStatus(null), 3000)
+      }
     }
   }
 
