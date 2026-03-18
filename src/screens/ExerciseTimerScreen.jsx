@@ -6,7 +6,7 @@ import { today } from '../utils/dateUtils'
 import useTimer from '../hooks/useTimer'
 import useWakeLock from '../hooks/useWakeLock'
 import useNotification from '../hooks/useNotification'
-import { initAudio, playStartTone, playWarningBeeps, playCompleteTone, playRestCompleteTone } from '../utils/audio'
+import { initAudio, playStartTone, playCompleteTone, playRestCompleteTone, playSwitchTone } from '../utils/audio'
 import TimerRing from '../components/TimerRing'
 import PainSlider from '../components/PainSlider'
 import CueList from '../components/CueList'
@@ -20,6 +20,7 @@ export default function ExerciseTimerScreen() {
   const [completed, setCompleted] = useState(false)
   const [painLevel, setPainLevel] = useState(0)
   const [notes, setNotes] = useState('')
+  const [showSwitchCue, setShowSwitchCue] = useState(false)
 
   // Rep-based state
   const [repSet, setRepSet] = useState(1)
@@ -33,7 +34,7 @@ export default function ExerciseTimerScreen() {
   const sessionStartTimeRef = useRef(null)
 
   const audioInitRef = useRef(false)
-  const warningFiredRef = useRef(false)
+  const halfwayFiredRef = useRef(false)
   // Absolute end time for rep-based rest so the countdown stays accurate
   // even if the app was backgrounded during the rest period.
   const repRestEndTimeRef = useRef(0)
@@ -131,17 +132,22 @@ export default function ExerciseTimerScreen() {
     }
   }, [timer.currentSet])
 
-  // Warning beeps at 10 seconds remaining during hold
+  // Halfway buzz for pendulums — signals time to switch circle direction
+  const isPendulums = exercise?.id === 'p1_pendulums'
+  const halfwayMs = isPendulums ? (holdTime * 1000) / 2 : 0
   useEffect(() => {
-    if (timer.state === 'holding' && timer.timeRemaining <= 10000 && timer.timeRemaining > 9500 && !warningFiredRef.current) {
-      warningFiredRef.current = true
-      if (settings?.timerSound) playWarningBeeps()
-      if (settings?.timerVibrate && navigator.vibrate) navigator.vibrate([100, 100, 100, 100, 100])
+    if (!isPendulums) return
+    if (timer.state === 'holding' && timer.timeRemaining <= halfwayMs && timer.timeRemaining > halfwayMs - 500 && !halfwayFiredRef.current) {
+      halfwayFiredRef.current = true
+      if (settings?.timerSound) playSwitchTone()
+      if (settings?.timerVibrate && navigator.vibrate) navigator.vibrate([200, 100, 200])
+      setShowSwitchCue(true)
+      setTimeout(() => setShowSwitchCue(false), 3000)
     }
-    if (timer.state !== 'holding' || timer.timeRemaining > 10500) {
-      warningFiredRef.current = false
+    if (timer.state !== 'holding' || timer.timeRemaining > halfwayMs + 500) {
+      halfwayFiredRef.current = false
     }
-  }, [timer.state, timer.timeRemaining, settings])
+  }, [timer.state, timer.timeRemaining, settings, isPendulums, halfwayMs])
 
   // Rep-based rest countdown — uses absolute end time so the display stays
   // accurate even if the app was backgrounded during the rest period.
@@ -552,6 +558,13 @@ export default function ExerciseTimerScreen() {
             strokeWidth={8}
             state={timer.state}
           />
+
+          {/* Switch direction cue for pendulums */}
+          {showSwitchCue && (
+            <div className="mt-2 px-4 py-2 rounded-full bg-amber/15 border border-amber/30 text-amber font-semibold text-sm animate-pulse">
+              Switch direction
+            </div>
+          )}
 
           {/* Set indicator */}
           <p className="text-sm font-semibold text-muted dark:text-muted-dark mt-3 mb-4">
