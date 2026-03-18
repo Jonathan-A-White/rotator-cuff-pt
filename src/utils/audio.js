@@ -130,6 +130,37 @@ export function playCompleteTone() {
 }
 
 /**
+ * Two-tone ascending alert (440Hz → 660Hz), 150ms each, 100ms gap.
+ * Used to signal direction switch (e.g. pendulums halfway point).
+ */
+export function playSwitchTone() {
+  const ctx = ensureContext();
+  const now = ctx.currentTime;
+  const frequencies = [440, 660];
+
+  frequencies.forEach((freq, i) => {
+    const startTime = now + i * 0.25; // 150ms tone + 100ms gap
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(freq, startTime);
+
+    const fadeDuration = 0.02;
+    gainNode.gain.setValueAtTime(0, startTime);
+    gainNode.gain.linearRampToValueAtTime(0.3, startTime + fadeDuration);
+    gainNode.gain.setValueAtTime(0.3, startTime + 0.15 - fadeDuration);
+    gainNode.gain.linearRampToValueAtTime(0, startTime + 0.15);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    oscillator.start(startTime);
+    oscillator.stop(startTime + 0.15);
+  });
+}
+
+/**
  * Same as start tone but played twice with a small gap.
  * Used to signal rest period completion.
  */
