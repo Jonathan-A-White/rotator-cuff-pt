@@ -26,9 +26,22 @@ public class SystemTimerPlugin extends Plugin {
         intent.putExtra(AlarmClock.EXTRA_LENGTH, seconds);
         intent.putExtra(AlarmClock.EXTRA_MESSAGE, label);
         intent.putExtra(AlarmClock.EXTRA_SKIP_UI, skipUi);
+        // Needed when launching from a Capacitor plugin context
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 
         try {
             getActivity().startActivity(intent);
+
+            // If we didn't skip the Clock UI, automatically return to our app
+            // after a short delay so the user doesn't have to manually switch back.
+            if (!skipUi) {
+                getActivity().getWindow().getDecorView().postDelayed(() -> {
+                    Intent back = new Intent(getContext(), getActivity().getClass());
+                    back.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                    getContext().startActivity(back);
+                }, 600);
+            }
+
             call.resolve();
         } catch (Exception e) {
             call.reject("Could not start system timer: " + e.getMessage());
