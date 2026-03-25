@@ -17,7 +17,7 @@ export async function startSystemTimer(seconds, label = 'Exercise Timer') {
     await SystemTimer.setTimer({
       seconds: Math.round(seconds),
       label,
-      skipUi: true,
+      skipUi: false,
     })
   } catch {
     // System clock app may not support ACTION_SET_TIMER — fail silently
