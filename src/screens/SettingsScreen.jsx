@@ -340,6 +340,13 @@ export default function SettingsScreen({ onDarkModeChange }) {
             onChange={(v) => handleNotificationToggle(v)}
           />
         </SettingRow>
+        <SettingRow label="System timer" description="Also start the Android clock timer so it shows in the notification bar">
+          <Toggle
+            label="System timer"
+            enabled={settings.systemTimer}
+            onChange={(v) => updateSetting('systemTimer', v)}
+          />
+        </SettingRow>
       </div>
 
       {/* ── Display ── */}
