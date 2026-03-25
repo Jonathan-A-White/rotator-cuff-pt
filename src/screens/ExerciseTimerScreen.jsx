@@ -7,6 +7,7 @@ import useTimer from '../hooks/useTimer'
 import useWakeLock from '../hooks/useWakeLock'
 import useNotification from '../hooks/useNotification'
 import { initAudio, playStartTone, playCompleteTone, playRestCompleteTone, playSwitchTone } from '../utils/audio'
+import { startSystemTimer } from '../utils/systemTimer'
 import TimerRing from '../components/TimerRing'
 import PainSlider from '../components/PainSlider'
 import CueList from '../components/CueList'
@@ -96,7 +97,11 @@ export default function ExerciseTimerScreen() {
     if (settings?.timerSound) playCompleteTone()
     if (settings?.timerVibrate && navigator.vibrate) navigator.vibrate(500)
     notification.notify('Hold complete', 'Good work — now rest.')
-  }, [settings, notification])
+    // Fire system timer for the upcoming rest phase (if auto-start rest is on)
+    if (settings?.systemTimer && (settings?.restTimerAutoStart ?? true) && restTime > 0) {
+      startSystemTimer(restTime, `${exercise?.name} — Rest`)
+    }
+  }, [settings, notification, restTime, exercise])
 
   const handleRestComplete = useCallback(() => {
     if (settings?.timerSound) playRestCompleteTone()
@@ -266,8 +271,9 @@ export default function ExerciseTimerScreen() {
     wakeLock.request()
     if (settings?.timerSound) playStartTone()
     if (settings?.timerVibrate && navigator.vibrate) navigator.vibrate(200)
+    if (settings?.systemTimer) startSystemTimer(holdTime, `${exercise.name} — Hold`)
     timer.start()
-  }, [ensureAudio, timer, settings, wakeLock])
+  }, [ensureAudio, timer, settings, wakeLock, holdTime, exercise])
 
   // Handle pause/resume
   const handlePauseResume = useCallback(() => {
@@ -297,10 +303,11 @@ export default function ExerciseTimerScreen() {
         setRepResting(true)
         setRepRestRemaining(restTime)
         repRestEndTimeRef.current = Date.now() + restTime * 1000
+        if (settings?.systemTimer) startSystemTimer(restTime, `${exercise?.name} — Rest`)
       }
       setRepSet((s) => s + 1)
     }
-  }, [ensureAudio, repSet, totalSets, restTime, settings, wakeLock])
+  }, [ensureAudio, repSet, totalSets, restTime, settings, wakeLock, exercise])
 
   // Skip rep rest
   const handleSkipRepRest = useCallback(() => {

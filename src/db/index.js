@@ -12,6 +12,7 @@ const DEFAULT_SETTINGS = {
   timerNotification: true,
   darkMode: "system",
   restTimerAutoStart: true,
+  systemTimer: false,
 };
 
 let dbPromise = null;
