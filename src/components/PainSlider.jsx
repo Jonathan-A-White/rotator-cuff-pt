@@ -24,9 +24,6 @@ export default function PainSlider({ value = 0, onChange, label = 'Pain Level' }
   const descriptor = useMemo(() => getDescriptor(value), [value]);
   const descriptorColor = useMemo(() => getDescriptorColor(value), [value]);
 
-  // Percentage for the filled portion of the track
-  const pct = (value / 10) * 100;
-
   return (
     <div className="w-full space-y-2">
       {/* Header row: label + value */}

@@ -38,12 +38,18 @@ export default function useTimer({
   const onRestCompleteRef = useRef(onRestComplete);
   const onAllCompleteRef = useRef(onAllComplete);
 
-  // Keep refs in sync
-  stateRef.current = state;
-  currentSetRef.current = currentSet;
-  onHoldCompleteRef.current = onHoldComplete;
-  onRestCompleteRef.current = onRestComplete;
-  onAllCompleteRef.current = onAllComplete;
+  // Ref for the tick function so recursive requestAnimationFrame calls
+  // always reference the latest version without a forward-declaration issue.
+  const tickRef = useRef(null);
+
+  // Keep refs in sync via effect (refs are only read in callbacks, not during render)
+  useEffect(() => {
+    stateRef.current = state;
+    currentSetRef.current = currentSet;
+    onHoldCompleteRef.current = onHoldComplete;
+    onRestCompleteRef.current = onRestComplete;
+    onAllCompleteRef.current = onAllComplete;
+  });
 
   // Cancel any pending animation frame
   const cancelFrame = useCallback(() => {
@@ -67,7 +73,7 @@ export default function useTimer({
     setTimeRemaining(remaining);
 
     if (remaining > 0) {
-      rafRef.current = requestAnimationFrame(tick);
+      rafRef.current = requestAnimationFrame(tickRef.current);
       return;
     }
 
@@ -84,7 +90,7 @@ export default function useTimer({
       if (hasMoreSets && autoStartRest) {
         // Automatically transition to rest
         startResting();
-        rafRef.current = requestAnimationFrame(tick);
+        rafRef.current = requestAnimationFrame(tickRef.current);
       } else if (hasMoreSets) {
         // Manual rest mode – go to idle so user can trigger rest / next action
         setState('idle');
@@ -120,6 +126,9 @@ export default function useTimer({
       }
     }
   }, [totalSets, autoStartRest, startResting]);
+
+  // Keep tickRef in sync so recursive RAF calls use the latest tick
+  useEffect(() => { tickRef.current = tick; });
 
   // --- Public API ---
 
