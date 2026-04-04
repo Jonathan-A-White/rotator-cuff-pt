@@ -10,6 +10,7 @@ import PhaseRulesScreen from './screens/PhaseRulesScreen'
 import ChecklistScreen from './screens/ChecklistScreen'
 import HistoryScreen from './screens/HistoryScreen'
 import NavBar from './components/NavBar'
+import { ProgramProvider } from './config/ProgramContext'
 import { getSettings } from './db'
 
 export default function App() {
@@ -37,20 +38,22 @@ export default function App() {
   }, [darkMode])
 
   return (
-    <div className="min-h-dvh pb-20">
-      <Routes>
-        <Route path="/" element={<HomeScreen />} />
-        <Route path="/exercise/:id" element={<ExerciseTimerScreen />} />
-        <Route path="/exercise/:id/detail" element={<ExerciseDetailScreen />} />
-        <Route path="/progress" element={<ProgressScreen />} />
-        <Route path="/assessment" element={<AssessmentScreen />} />
-        <Route path="/settings" element={<SettingsScreen onDarkModeChange={setDarkMode} />} />
-        <Route path="/phase-rules" element={<PhaseRulesScreen />} />
-        <Route path="/checklist" element={<ChecklistScreen />} />
-        <Route path="/history" element={<HistoryScreen />} />
-        <Route path="/history/:exerciseId" element={<HistoryScreen />} />
-      </Routes>
-      <NavBar />
-    </div>
+    <ProgramProvider>
+      <div className="min-h-dvh pb-20">
+        <Routes>
+          <Route path="/" element={<HomeScreen />} />
+          <Route path="/exercise/:id" element={<ExerciseTimerScreen />} />
+          <Route path="/exercise/:id/detail" element={<ExerciseDetailScreen />} />
+          <Route path="/progress" element={<ProgressScreen />} />
+          <Route path="/assessment" element={<AssessmentScreen />} />
+          <Route path="/settings" element={<SettingsScreen onDarkModeChange={setDarkMode} />} />
+          <Route path="/phase-rules" element={<PhaseRulesScreen />} />
+          <Route path="/checklist" element={<ChecklistScreen />} />
+          <Route path="/history" element={<HistoryScreen />} />
+          <Route path="/history/:exerciseId" element={<HistoryScreen />} />
+        </Routes>
+        <NavBar />
+      </div>
+    </ProgramProvider>
   )
 }

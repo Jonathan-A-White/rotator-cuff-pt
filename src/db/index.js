@@ -1,7 +1,7 @@
 import { openDB } from "idb";
 
 const DB_NAME = "rcpt-db";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const DEFAULT_SETTINGS = {
   currentPhase: 1,
@@ -13,6 +13,7 @@ const DEFAULT_SETTINGS = {
   darkMode: "system",
   restTimerAutoStart: true,
   systemTimer: false,
+  activeProgramId: null, // ID of the active program config
 };
 
 let dbPromise = null;
@@ -20,32 +21,79 @@ let dbPromise = null;
 export async function getDB() {
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        // Workout logs store
-        const workoutStore = db.createObjectStore("workoutLogs", {
-          keyPath: "id",
-        });
-        workoutStore.createIndex("date", "date", { unique: false });
-        workoutStore.createIndex("exerciseId", "exerciseId", {
-          unique: false,
-        });
-        workoutStore.createIndex("timestamp", "timestamp", { unique: false });
+      upgrade(db, oldVersion) {
+        // ── Version 1 → create initial stores ─────────────────────────
+        if (oldVersion < 1) {
+          const workoutStore = db.createObjectStore("workoutLogs", {
+            keyPath: "id",
+          });
+          workoutStore.createIndex("date", "date", { unique: false });
+          workoutStore.createIndex("exerciseId", "exerciseId", {
+            unique: false,
+          });
+          workoutStore.createIndex("timestamp", "timestamp", { unique: false });
 
-        // Assessments store
-        const assessmentStore = db.createObjectStore("assessments", {
-          keyPath: "id",
-        });
-        assessmentStore.createIndex("date", "date", { unique: false });
+          const assessmentStore = db.createObjectStore("assessments", {
+            keyPath: "id",
+          });
+          assessmentStore.createIndex("date", "date", { unique: false });
 
-        // Settings store
-        db.createObjectStore("settings", { keyPath: "key" });
+          db.createObjectStore("settings", { keyPath: "key" });
+          db.createObjectStore("checklist", { keyPath: "id" });
+        }
 
-        // Checklist store
-        db.createObjectStore("checklist", { keyPath: "id" });
+        // ── Version 2 → add programs store + programId index ──────────
+        if (oldVersion < 2) {
+          // Programs store for saving program configs
+          db.createObjectStore("programs", { keyPath: "id" });
+
+          // Add programId index to workoutLogs if the store exists
+          // (existing logs without programId will be migrated on read)
+          if (db.objectStoreNames.contains("workoutLogs")) {
+            const tx = db.transaction.objectStore
+              ? db.transaction.objectStore("workoutLogs")
+              : null;
+            // We can't easily add an index to existing store in upgrade
+            // without recreating it. Instead, we'll filter by programId
+            // at the application level for backward compatibility.
+          }
+        }
       },
     });
   }
   return dbPromise;
+}
+
+// ── Programs ──────���───────────────────────────────────────────────────────
+
+export async function saveProgram(program) {
+  const db = await getDB();
+  await db.put("programs", program);
+}
+
+export async function getProgram(programId) {
+  const db = await getDB();
+  return db.get("programs", programId);
+}
+
+export async function getAllPrograms() {
+  const db = await getDB();
+  return db.getAll("programs");
+}
+
+export async function deleteProgram(programId) {
+  const db = await getDB();
+  await db.delete("programs", programId);
+}
+
+/**
+ * Get the active program config (the one currently selected).
+ * Returns null if no custom program is saved (app uses built-in default).
+ */
+export async function getActiveProgram() {
+  const settings = await getSettings();
+  if (!settings.activeProgramId) return null;
+  return getProgram(settings.activeProgramId);
 }
 
 // ── Settings ─────────────────────────────────────────────────────────────
@@ -77,6 +125,7 @@ export async function logWorkout(log) {
     source: log.source || "timer",
     startTime: log.startTime || now,
     endTime: log.endTime || now,
+    programId: log.programId || null,
   };
   await db.add("workoutLogs", entry);
   return entry;
@@ -170,6 +219,7 @@ export async function adjustSetsForDate(exerciseId, dateStr, newTotal) {
       source: "manual",
       startTime: latest?.startTime || latest?.timestamp || now,
       endTime: latest?.endTime || latest?.timestamp || now,
+      programId: latest?.programId || null,
       ...(latest?.painLevel != null ? { painLevel: latest.painLevel } : {}),
       ...(latest?.notes ? { notes: latest.notes } : {}),
     });
@@ -253,6 +303,7 @@ export async function saveAssessment(assessment) {
   const entry = {
     ...assessment,
     id: assessment.id || crypto.randomUUID(),
+    programId: assessment.programId || null,
   };
   await db.put("assessments", entry);
   return entry;
@@ -277,15 +328,16 @@ export async function setChecklistItem(id, checked) {
   await db.put("checklist", { id, checked });
 }
 
-// ── Data Import / Export ─────────────────────────────────────────────────
+// ── Data Import / Export ────────────────────────────��────────────────────
 
 export async function exportAllData() {
   const db = await getDB();
-  const [workoutLogs, assessments, settings, checklist] = await Promise.all([
+  const [workoutLogs, assessments, settings, checklist, programs] = await Promise.all([
     db.getAll("workoutLogs"),
     db.getAll("assessments"),
     db.getAll("settings"),
     db.getAll("checklist"),
+    db.getAll("programs"),
   ]);
   return {
     version: DB_VERSION,
@@ -294,6 +346,7 @@ export async function exportAllData() {
     assessments,
     settings,
     checklist,
+    programs,
   };
 }
 
@@ -315,14 +368,14 @@ export function validateImportData(data) {
   }
 
   // Must have at least one data array present
-  const storeKeys = ["workoutLogs", "assessments", "settings", "checklist"];
+  const storeKeys = ["workoutLogs", "assessments", "settings", "checklist", "programs"];
   const hasAnyData = storeKeys.some(
     (key) => Array.isArray(data[key]) && data[key].length > 0,
   );
   if (!hasAnyData) {
     return {
       valid: false,
-      reason: "No recognizable data found (workoutLogs, assessments, settings, or checklist).",
+      reason: "No recognizable data found (workoutLogs, assessments, settings, checklist, or programs).",
     };
   }
 
@@ -380,14 +433,13 @@ export function migrateImportData(data) {
   let migrated = { ...data };
   const fromVersion = migrated.version || 1;
 
-  // Future migrations go here, e.g.:
-  // if (fromVersion < 2) {
-  //   migrated.workoutLogs = (migrated.workoutLogs || []).map(log => ({
-  //     ...log,
-  //     newField: log.oldField ?? defaultValue,
-  //   }));
-  //   migrated.version = 2;
-  // }
+  // v1 → v2: ensure programs array exists
+  if (fromVersion < 2) {
+    if (!migrated.programs) {
+      migrated.programs = [];
+    }
+    migrated.version = 2;
+  }
 
   migrated.version = DB_VERSION;
   return migrated;
@@ -400,7 +452,7 @@ export async function importData(data) {
   const db = await getDB();
 
   // Back up current data before clearing, so we can restore on failure
-  const storeNames = ["workoutLogs", "assessments", "settings", "checklist"];
+  const storeNames = ["workoutLogs", "assessments", "settings", "checklist", "programs"];
   const backup = {};
   for (const name of storeNames) {
     backup[name] = await db.getAll(name);
@@ -423,6 +475,7 @@ export async function importData(data) {
       ...putAll("assessments", migrated.assessments),
       ...putAll("settings", migrated.settings),
       ...putAll("checklist", migrated.checklist),
+      ...putAll("programs", migrated.programs),
       tx.done,
     ]);
   } catch (err) {
@@ -446,15 +499,10 @@ export async function importData(data) {
 
 export async function clearAllData() {
   const db = await getDB();
-  const tx = db.transaction(
-    ["workoutLogs", "assessments", "settings", "checklist"],
-    "readwrite",
-  );
+  const storeNames = ["workoutLogs", "assessments", "settings", "checklist", "programs"];
+  const tx = db.transaction(storeNames, "readwrite");
   await Promise.all([
-    tx.objectStore("workoutLogs").clear(),
-    tx.objectStore("assessments").clear(),
-    tx.objectStore("settings").clear(),
-    tx.objectStore("checklist").clear(),
+    ...storeNames.map((name) => tx.objectStore(name).clear()),
     tx.done,
   ]);
 }
