@@ -142,6 +142,19 @@ export const exercises = [
       "Progress to bands when painless",
     ],
     emoji: "🤜",
+    effortGuidance: "Isometric — hold and press",
+    videoUrl:
+      "https://www.youtube.com/watch?v=cI4GN8NqRdg",
+    videoReferences: [
+      {
+        label: "Precision Movement — 5 SUBSCAPULARIS Exercises (belly press as Exercise #3)",
+        url: "https://www.youtube.com/results?search_query=precision+movement+5+subscapularis+exercises+rotator+cuff",
+      },
+      {
+        label: "The Physio Channel — Belly Press Subscapularis Test",
+        url: "https://www.youtube.com/watch?v=cI4GN8NqRdg",
+      },
+    ],
     sortOrder: 6,
   },
   {
@@ -164,6 +177,22 @@ export const exercises = [
     ],
     emoji: "🟡",
     effortGuidance: "Slow tempo: 2 sec concentric, 3 sec eccentric",
+    videoUrl:
+      "https://www.youtube.com/results?search_query=band+internal+rotation+shoulder+towel+roll+rotator+cuff+rehab",
+    videoReferences: [
+      {
+        label: "General search — Band IR with towel roll",
+        url: "https://www.youtube.com/results?search_query=band+internal+rotation+shoulder+towel+roll+rotator+cuff+rehab",
+      },
+      {
+        label: "Kaiser Permanente — Rotator Cuff Exercises (banded IR with towel roll)",
+        url: "https://healthy.kaiserpermanente.org/health-wellness/health-encyclopedia/he.rotator-cuff-exercises.ad1509",
+      },
+      {
+        label: "The Stone Clinic — Shoulder Theraband External and Internal Rotation",
+        url: "https://www.stoneclinic.com/video/Shoulder-Theraband-External-and-Internal-Rotation",
+      },
+    ],
     sortOrder: 7,
   },
   {
@@ -185,6 +214,23 @@ export const exercises = [
       "Slow controlled tempo",
     ],
     emoji: "🟢",
+    effortGuidance: "Slow controlled tempo",
+    videoUrl:
+      "https://www.youtube.com/results?search_query=band+external+rotation+shoulder+towel+roll+elbow+tucked+rehab",
+    videoReferences: [
+      {
+        label: "General search — Band ER with towel roll",
+        url: "https://www.youtube.com/results?search_query=band+external+rotation+shoulder+towel+roll+elbow+tucked+rehab",
+      },
+      {
+        label: "E3 Rehab — Rotator Cuff Exercises (band ER with towel roll, common mistakes)",
+        url: "https://e3rehab.com/rotator-cuff-exercises/",
+      },
+      {
+        label: "[P]rehab — Eccentric Shoulder ER Walk Out (advanced variation)",
+        url: "https://library.theprehabguys.com/vimeo-video/eccentric-shoulder-external-rotation-walk-out-band/",
+      },
+    ],
     sortOrder: 8,
   },
   {
@@ -208,6 +254,22 @@ export const exercises = [
     emoji: "🙆",
     painThreshold:
       "Add weight only after 2 consecutive painless sessions",
+    videoUrl:
+      "https://www.youtube.com/results?search_query=prone+Y+T+W+raises+shoulder+rehab+no+weight+bodyweight",
+    videoReferences: [
+      {
+        label: "General search — Prone Y-T-W (bodyweight)",
+        url: "https://www.youtube.com/results?search_query=prone+Y+T+W+raises+shoulder+rehab+no+weight+bodyweight",
+      },
+      {
+        label: "Standing Y-T-W — Scapular retraction version",
+        url: "https://www.youtube.com/results?search_query=standing+YTW+exercise+shoulder+scapular+retraction",
+      },
+      {
+        label: "Catalyst Athletics — YTW exercise (band and prone variations)",
+        url: "https://www.catalystathletics.com/exercise/920/YTW/",
+      },
+    ],
     sortOrder: 9,
   },
   {
@@ -229,6 +291,27 @@ export const exercises = [
       "Slow and controlled",
     ],
     emoji: "🛏️",
+    effortGuidance: "Slow and controlled",
+    videoUrl:
+      "https://www.youtube.com/results?search_query=side+lying+external+rotation+dumbbell+rotator+cuff",
+    videoReferences: [
+      {
+        label: "General search — Side-lying ER dumbbell",
+        url: "https://www.youtube.com/results?search_query=side+lying+external+rotation+dumbbell+rotator+cuff",
+      },
+      {
+        label: "[P]rehab — Side Lying External Rotation Dumbbell",
+        url: "https://library.theprehabguys.com/vimeo-video/side-lying-external-rotation-dumbbell-2/",
+      },
+      {
+        label: "Point Performance — Side-Lying Shoulder Exercise Series",
+        url: "https://www.pointperformance.com/side-lying-shoulder-exercise-series-video/",
+      },
+      {
+        label: "Live Lean TV — Side Lying Dumbbell External Rotation",
+        url: "https://www.liveleantv.com/how-to-do-a-side-lying-one-arm-dumbbell-external-rotation/",
+      },
+    ],
     sortOrder: 10,
   },
 
