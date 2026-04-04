@@ -147,8 +147,31 @@ export default function ExerciseDetailScreen() {
         </div>
       )}
 
-      {/* Watch Video button */}
-      {exercise.videoUrl && (
+      {/* Video references */}
+      {exercise.videoReferences && exercise.videoReferences.length > 0 ? (
+        <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-xl p-4 mb-4">
+          <h2 className="text-xs font-bold uppercase tracking-wide text-muted dark:text-muted-dark mb-2">
+            Video References
+          </h2>
+          <ul className="space-y-2" role="list">
+            {exercise.videoReferences.map((ref, i) => (
+              <li key={i}>
+                <a
+                  href={ref.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-start gap-2 text-sm leading-relaxed text-red hover:text-red/80 transition-colors"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 mt-0.5 shrink-0">
+                    <path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+                  </svg>
+                  <span className="underline underline-offset-2">{ref.label}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : exercise.videoUrl ? (
         <a
           href={exercise.videoUrl}
           target="_blank"
@@ -160,7 +183,7 @@ export default function ExerciseDetailScreen() {
           </svg>
           Watch Video
         </a>
-      )}
+      ) : null}
 
       {/* History section: last 7 days of logs */}
       <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-xl p-4">
