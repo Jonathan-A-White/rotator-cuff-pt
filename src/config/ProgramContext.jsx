@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import defaultProgram from './defaultProgram.json'
 import { validateProgram, inferTimerType } from './schema'
-import { getActiveProgram, saveProgram, getSettings } from '../db'
+import { getActiveProgram, saveProgram } from '../db'
 
 const ProgramContext = createContext(null)
 
@@ -108,6 +108,7 @@ export function ProgramProvider({ children }) {
 /**
  * Hook to access the active program configuration.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function useProgram() {
   const ctx = useContext(ProgramContext)
   if (!ctx) {

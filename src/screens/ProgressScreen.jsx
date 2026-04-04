@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useProgram } from '../config/ProgramContext'
 import { extractPainFields } from '../config/schema'
 import { getSettings, getLogsInRange, getAssessments, backfillPhaseStartDate } from '../db'
-import { today, daysAgo, getWeekDates, dayOfWeek, daysBetween } from '../utils/dateUtils'
+import { today, daysAgo, getWeekDates, dayOfWeek } from '../utils/dateUtils'
 import { evaluatePhaseReadiness } from '../utils/phaseReadiness'
 
 export default function ProgressScreen() {
@@ -77,7 +77,7 @@ export default function ProgressScreen() {
 
     load()
     return () => { cancelled = true }
-  }, [])
+  }, [exercises, progressionRules, assessmentSections])
 
   if (loading || !settings) {
     return (
@@ -129,7 +129,6 @@ export default function ProgressScreen() {
 
   // SVG bar chart dimensions
   const chartHeight = 120
-  const barGap = 4
 
   return (
     <div className="page-enter px-4 pt-6 pb-24 max-w-lg mx-auto space-y-5">

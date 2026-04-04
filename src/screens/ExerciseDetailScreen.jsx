@@ -11,13 +11,10 @@ export default function ExerciseDetailScreen() {
   const { exercises, categories } = useProgram()
   const exercise = exercises.find((e) => e.id === id)
   const [history, setHistory] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!exercise ? false : true)
 
   useEffect(() => {
-    if (!exercise) {
-      setLoading(false)
-      return
-    }
+    if (!exercise) return
     getLogsForExercise(id, 14).then((logs) => {
       setHistory(logs)
       setLoading(false)

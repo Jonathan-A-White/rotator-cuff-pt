@@ -41,7 +41,7 @@ function SettingRow({ label, description, children }) {
 
 export default function SettingsScreen({ onDarkModeChange }) {
   const navigate = useNavigate()
-  const { phases, phaseMap, program, switchProgram, resetToDefault } = useProgram()
+  const { phases, program, switchProgram, resetToDefault } = useProgram()
   const [settings, setSettings] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showPhaseConfirm, setShowPhaseConfirm] = useState(null) // phase number or null

@@ -42,21 +42,11 @@ export async function getDB() {
           db.createObjectStore("checklist", { keyPath: "id" });
         }
 
-        // ── Version 2 → add programs store + programId index ──────────
+        // ── Version 2 → add programs store ──────────────────────────────
         if (oldVersion < 2) {
-          // Programs store for saving program configs
           db.createObjectStore("programs", { keyPath: "id" });
-
-          // Add programId index to workoutLogs if the store exists
-          // (existing logs without programId will be migrated on read)
-          if (db.objectStoreNames.contains("workoutLogs")) {
-            const tx = db.transaction.objectStore
-              ? db.transaction.objectStore("workoutLogs")
-              : null;
-            // We can't easily add an index to existing store in upgrade
-            // without recreating it. Instead, we'll filter by programId
-            // at the application level for backward compatibility.
-          }
+          // Note: programId on workoutLogs/assessments is filtered at the
+          // application level for backward compatibility (no index needed).
         }
       },
     });
