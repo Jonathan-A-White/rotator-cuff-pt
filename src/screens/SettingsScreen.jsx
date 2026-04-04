@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useProgram } from '../config/ProgramContext'
+import { validateProgram } from '../config/schema'
 import { getSettings, saveSettings, exportAllData, importData, validateImportData, clearAllData, backfillPhaseStartDate } from '../db'
 import { today } from '../utils/dateUtils'
 
@@ -39,6 +41,7 @@ function SettingRow({ label, description, children }) {
 
 export default function SettingsScreen({ onDarkModeChange }) {
   const navigate = useNavigate()
+  const { phases, program, switchProgram, resetToDefault } = useProgram()
   const [settings, setSettings] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showPhaseConfirm, setShowPhaseConfirm] = useState(null) // phase number or null
@@ -98,7 +101,7 @@ export default function SettingsScreen({ onDarkModeChange }) {
       const data = await exportAllData()
       const json = JSON.stringify(data, null, 2)
       const blob = new Blob([json], { type: 'application/json' })
-      const fileName = `rcpt-backup-${new Date().toISOString().split('T')[0]}.json`
+      const fileName = `${program.id}-backup-${new Date().toISOString().split('T')[0]}.json`
 
       // Use File System Access API when available — on Android Chrome 132+
       // the save picker shows Google Drive and other storage providers.
@@ -205,11 +208,11 @@ export default function SettingsScreen({ onDarkModeChange }) {
     )
   }
 
-  const phaseDescriptions = {
-    1: 'Pain Reduction & Isometric Loading (Weeks 1-2)',
-    2: 'Isotonic Strengthening (Weeks 3-6). Includes Phase 1 exercises.',
-    3: 'Pull-Up Return (Weeks 7-12+). Includes Phase 1 & 2 exercises.',
-  }
+  const phaseDescriptions = {}
+  phases.forEach((p, idx) => {
+    const prev = idx > 0 ? ` Includes Phase ${phases.slice(0, idx).map(pp => pp.id).join(' & ')} exercises.` : ''
+    phaseDescriptions[p.id] = `${p.name} (Weeks ${p.weeks}).${prev}`
+  })
 
   return (
     <div className="page-enter px-4 pt-6 pb-24 max-w-lg mx-auto space-y-6">
@@ -218,22 +221,22 @@ export default function SettingsScreen({ onDarkModeChange }) {
       {/* ── Current Phase ── */}
       <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl p-5">
         <h2 className="text-base font-semibold mb-3 dark:text-white">Current Phase</h2>
-        <div className="grid grid-cols-3 gap-2">
-          {[1, 2, 3].map((phase) => (
+        <div className={`grid grid-cols-${Math.min(phases.length, 3)} gap-2`}>
+          {phases.map((phaseObj) => (
             <button
-              key={phase}
+              key={phaseObj.id}
               onClick={() => {
-                if (phase !== settings.currentPhase) {
-                  setShowPhaseConfirm(phase)
+                if (phaseObj.id !== settings.currentPhase) {
+                  setShowPhaseConfirm(phaseObj.id)
                 }
               }}
               className={`min-h-[48px] rounded-xl text-sm font-semibold transition-colors ${
-                settings.currentPhase === phase
+                settings.currentPhase === phaseObj.id
                   ? 'bg-teal text-white'
                   : 'bg-gray-100 dark:bg-[#1C1C1E] text-gray-700 dark:text-gray-300 border border-[#E5E5E5] dark:border-[#3A3A3C]'
               }`}
             >
-              Phase {phase}
+              Phase {phaseObj.id}
             </button>
           ))}
         </div>
@@ -458,6 +461,87 @@ export default function SettingsScreen({ onDarkModeChange }) {
         </div>
       )}
 
+      {/* ── Program ── */}
+      <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl p-5 space-y-3">
+        <h2 className="text-base font-semibold mb-1 dark:text-white">Program</h2>
+        <p className="text-sm text-muted dark:text-muted-dark">
+          Current: <span className="font-medium dark:text-white">{program.name}</span>
+        </p>
+
+        <button
+          onClick={() => {
+            const input = document.createElement('input')
+            input.type = 'file'
+            input.accept = '.json'
+            input.onchange = async (e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              try {
+                const text = await file.text()
+                let data
+                try {
+                  data = JSON.parse(text)
+                } catch {
+                  setImportStatus({ type: 'error', message: 'File is not valid JSON.' })
+                  setTimeout(() => setImportStatus(null), 5000)
+                  return
+                }
+                const validation = validateProgram(data)
+                if (!validation.valid) {
+                  setImportStatus({ type: 'error', message: `Invalid program: ${validation.errors.join(', ')}` })
+                  setTimeout(() => setImportStatus(null), 5000)
+                  return
+                }
+                const result = await switchProgram(data)
+                if (result.success) {
+                  setImportStatus({ type: 'success', message: `Switched to "${data.name}" program.` })
+                } else {
+                  setImportStatus({ type: 'error', message: `Failed: ${result.errors.join(', ')}` })
+                }
+                setTimeout(() => setImportStatus(null), 5000)
+              } catch (err) {
+                console.error('Import program failed:', err)
+                setImportStatus({ type: 'error', message: 'Failed to read the file.' })
+                setTimeout(() => setImportStatus(null), 5000)
+              }
+            }
+            input.click()
+          }}
+          className="w-full min-h-[48px] rounded-xl text-sm font-semibold bg-gray-100 dark:bg-[#1C1C1E] text-gray-700 dark:text-gray-300 border border-[#E5E5E5] dark:border-[#3A3A3C] transition-colors"
+        >
+          Import Program
+        </button>
+
+        <button
+          onClick={() => {
+            try {
+              const json = JSON.stringify(program, null, 2)
+              const blob = new Blob([json], { type: 'application/json' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `${program.id}-program.json`
+              document.body.appendChild(a)
+              a.click()
+              document.body.removeChild(a)
+              URL.revokeObjectURL(url)
+            } catch (err) {
+              console.error('Export program failed:', err)
+            }
+          }}
+          className="w-full min-h-[48px] rounded-xl text-sm font-semibold bg-gray-100 dark:bg-[#1C1C1E] text-gray-700 dark:text-gray-300 border border-[#E5E5E5] dark:border-[#3A3A3C] transition-colors"
+        >
+          Export Program
+        </button>
+
+        <button
+          onClick={resetToDefault}
+          className="w-full min-h-[48px] rounded-xl text-sm font-semibold bg-amber/10 text-amber border border-amber/20 transition-colors"
+        >
+          Reset to Default
+        </button>
+      </div>
+
       {/* ── Links ── */}
       <div className="space-y-3">
         <button
@@ -470,15 +554,17 @@ export default function SettingsScreen({ onDarkModeChange }) {
           </svg>
         </button>
 
-        <button
-          onClick={() => navigate('/checklist')}
-          className="w-full min-h-[48px] bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl px-5 py-4 flex items-center justify-between text-left"
-        >
-          <span className="font-medium dark:text-white">Return-to-Pull-Ups Checklist</span>
-          <svg viewBox="0 0 24 24" className="w-5 h-5 text-muted dark:text-muted-dark" fill="none" stroke="currentColor" strokeWidth={2}>
-            <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
+        {phases.some(p => p.checklists?.length > 0) && (
+          <button
+            onClick={() => navigate('/checklist')}
+            className="w-full min-h-[48px] bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl px-5 py-4 flex items-center justify-between text-left"
+          >
+            <span className="font-medium dark:text-white">Milestone Checklist</span>
+            <svg viewBox="0 0 24 24" className="w-5 h-5 text-muted dark:text-muted-dark" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        )}
       </div>
     </div>
   )

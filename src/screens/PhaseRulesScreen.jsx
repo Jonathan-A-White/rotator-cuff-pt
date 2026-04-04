@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { phaseRules } from '../data/phases'
+import { useProgram } from '../config/ProgramContext'
 import { getSettings } from '../db'
 
 export default function PhaseRulesScreen() {
   const navigate = useNavigate()
+  const { phases, phaseMap } = useProgram()
   const [currentPhase, setCurrentPhase] = useState(1)
   const [expandedPhase, setExpandedPhase] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -17,8 +18,6 @@ export default function PhaseRulesScreen() {
       setLoading(false)
     })
   }, [])
-
-  const phases = [1, 2, 3]
 
   if (loading) {
     return (
@@ -59,26 +58,23 @@ export default function PhaseRulesScreen() {
         </span>
         <div>
           <p className="text-sm font-semibold text-teal dark:text-teal-light">
-            {phaseRules[currentPhase]?.name}
+            {phaseMap[currentPhase]?.name}
           </p>
           <p className="text-xs text-muted dark:text-muted-dark">
-            Current phase &middot; Weeks {phaseRules[currentPhase]?.weeks}
+            Current phase &middot; Weeks {phaseMap[currentPhase]?.weeks}
           </p>
         </div>
       </div>
 
       {/* Phase cards */}
       <div className="space-y-3">
-        {phases.map((phase) => {
-          const rules = phaseRules[phase]
-          if (!rules) return null
-
-          const isCurrent = phase === currentPhase
-          const isExpanded = expandedPhase === phase
+        {phases.map((phaseObj) => {
+          const isCurrent = phaseObj.id === currentPhase
+          const isExpanded = expandedPhase === phaseObj.id
 
           return (
             <div
-              key={phase}
+              key={phaseObj.id}
               className={`bg-white dark:bg-[#2C2C2E] border rounded-xl overflow-hidden transition-colors ${
                 isCurrent
                   ? 'border-teal dark:border-teal'
@@ -88,7 +84,7 @@ export default function PhaseRulesScreen() {
               {/* Collapsible header */}
               <button
                 type="button"
-                onClick={() => setExpandedPhase(isExpanded ? null : phase)}
+                onClick={() => setExpandedPhase(isExpanded ? null : phaseObj.id)}
                 aria-expanded={isExpanded}
                 className="w-full flex items-center justify-between p-4 touch-target min-h-[48px] text-left"
               >
@@ -100,14 +96,14 @@ export default function PhaseRulesScreen() {
                         : 'bg-gray-100 dark:bg-gray-800 text-muted dark:text-muted-dark'
                     }`}
                   >
-                    Phase {phase}
+                    Phase {phaseObj.id}
                   </span>
                   <div>
                     <p className={`font-medium text-sm ${isCurrent ? 'dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}>
-                      {rules.name}
+                      {phaseObj.name}
                     </p>
                     <p className="text-xs text-muted dark:text-muted-dark">
-                      Weeks {rules.weeks}
+                      Weeks {phaseObj.weeks}
                     </p>
                   </div>
                 </div>
@@ -132,7 +128,7 @@ export default function PhaseRulesScreen() {
               {isExpanded && (
                 <div className="px-4 pb-4 border-t border-[#E5E5E5] dark:border-[#3A3A3C] pt-3">
                   <ul className="space-y-2.5" role="list">
-                    {rules.rules.map((rule, i) => (
+                    {(phaseObj.rules || []).map((rule, i) => (
                       <li
                         key={i}
                         className="flex items-start gap-2.5 text-sm leading-relaxed dark:text-white"

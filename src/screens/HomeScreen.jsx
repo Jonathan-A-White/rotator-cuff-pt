@@ -1,22 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { exercises } from '../data/exercises'
+import { useProgram } from '../config/ProgramContext'
 import { getSettings, getLogsForDate, addManualLog, decrementLatestLog } from '../db'
 import { today } from '../utils/dateUtils'
 import ExerciseCard from '../components/ExerciseCard'
 
 export default function HomeScreen() {
   const navigate = useNavigate()
+  const { exercises, phaseMap } = useProgram()
   const [currentPhase, setCurrentPhase] = useState(1)
   const [logs, setLogs] = useState([])
   const [loading, setLoading] = useState(true)
   const [editMode, setEditMode] = useState(false)
-
-  const phaseDescriptions = {
-    1: 'Pain Reduction & Isometric Loading',
-    2: 'Isotonic Strengthening',
-    3: 'Pull-Up Return',
-  }
 
   useEffect(() => {
     let cancelled = false
@@ -105,7 +100,7 @@ export default function HomeScreen() {
             Phase {currentPhase}
           </span>
           <span className="text-sm text-muted dark:text-muted-dark font-medium">
-            {phaseDescriptions[currentPhase]}
+            {phaseMap[currentPhase]?.name || ''}
           </span>
         </div>
 
