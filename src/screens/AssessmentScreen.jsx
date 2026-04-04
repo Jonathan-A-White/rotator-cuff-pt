@@ -1,24 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { useProgram } from '../config/ProgramContext'
+import { buildInitialAssessmentForm } from '../config/schema'
 import { getAssessments, saveAssessment } from '../db'
 import { today, formatDate } from '../utils/dateUtils'
 import PainSlider from '../components/PainSlider'
-
-const INITIAL_FORM = {
-  painfulArc: 0,
-  painfulArcStartDeg: '',
-  emptyCan: 0,
-  resistedER: 0,
-  liftOffPositioning: 0,
-  liftOffLifting: 0,
-  liftOffInches: '',
-  crossBodyAdduction: 0,
-  jacketTest: 0,
-  deadHangPain: 0,
-  deadHangDuration: '',
-  averageDailyPain: 0,
-  sleepQuality: 'Good',
-  notes: '',
-}
 
 function getTrend(current, previous) {
   if (current > previous) return { arrow: '\u2191', label: 'worse', color: 'text-red dark:text-red-400' }
@@ -27,9 +12,11 @@ function getTrend(current, previous) {
 }
 
 export default function AssessmentScreen() {
+  const { assessmentSections, assessmentSummaryFields } = useProgram()
+  const INITIAL_FORM = useMemo(() => buildInitialAssessmentForm(assessmentSections), [assessmentSections])
   const [tab, setTab] = useState('new') // 'new' | 'history'
-  const [form, setForm] = useState({ ...INITIAL_FORM })
-  const [showDeadHang, setShowDeadHang] = useState(false)
+  const [form, setForm] = useState(() => buildInitialAssessmentForm(assessmentSections))
+  const [collapsedSections, setCollapsedSections] = useState({})
   const [assessments, setAssessments] = useState([])
   const [expandedId, setExpandedId] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -60,22 +47,20 @@ export default function AssessmentScreen() {
     if (saving) return
     setSaving(true)
     try {
-      const entry = {
-        date: today(),
-        painfulArc: form.painfulArc,
-        painfulArcStartDeg: form.painfulArcStartDeg ? Number(form.painfulArcStartDeg) : null,
-        emptyCan: form.emptyCan,
-        resistedER: form.resistedER,
-        liftOffPositioning: form.liftOffPositioning,
-        liftOffLifting: form.liftOffLifting,
-        liftOffInches: form.liftOffInches ? Number(form.liftOffInches) : null,
-        crossBodyAdduction: form.crossBodyAdduction,
-        jacketTest: form.jacketTest,
-        deadHangPain: showDeadHang ? form.deadHangPain : null,
-        deadHangDuration: showDeadHang && form.deadHangDuration ? Number(form.deadHangDuration) : null,
-        averageDailyPain: form.averageDailyPain,
-        sleepQuality: form.sleepQuality,
-        notes: form.notes,
+      const entry = { date: today() }
+      for (const section of assessmentSections) {
+        // Skip collapsible sections that are collapsed (user didn't fill them in)
+        const isCollapsed = section.collapsible && collapsedSections[section.id] !== true
+        for (const field of section.fields || []) {
+          const val = form[field.id]
+          if (section.collapsible && isCollapsed) {
+            entry[field.id] = null
+          } else if (field.type === 'number') {
+            entry[field.id] = val !== '' && val != null ? Number(val) : null
+          } else {
+            entry[field.id] = val
+          }
+        }
       }
 
       const saved = await saveAssessment(entry)
@@ -83,7 +68,7 @@ export default function AssessmentScreen() {
       setAssessments(updated)
       setHighlightId(saved.id)
       setForm({ ...INITIAL_FORM })
-      setShowDeadHang(false)
+      setCollapsedSections({})
       setTab('history')
     } catch (err) {
       console.error('Failed to save assessment:', err)
@@ -92,16 +77,7 @@ export default function AssessmentScreen() {
     }
   }
 
-  const painMetrics = [
-    { key: 'painfulArc', label: 'Painful Arc' },
-    { key: 'emptyCan', label: 'Empty Can' },
-    { key: 'resistedER', label: 'Resisted ER' },
-    { key: 'liftOffPositioning', label: 'Lift-Off Pos.' },
-    { key: 'liftOffLifting', label: 'Lift-Off Lift' },
-    { key: 'crossBodyAdduction', label: 'Cross-Body' },
-    { key: 'jacketTest', label: 'Jacket Test' },
-    { key: 'averageDailyPain', label: 'Avg Daily Pain' },
-  ]
+  const painMetrics = assessmentSummaryFields
 
   if (loading) {
     return (
@@ -138,180 +114,116 @@ export default function AssessmentScreen() {
       {/* ── New Assessment Form ── */}
       {tab === 'new' && (
         <div className="space-y-6">
-          {/* Painful Arc */}
-          <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl p-5 space-y-4">
-            <PainSlider
-              label="Painful Arc"
-              value={form.painfulArc}
-              onChange={(v) => updateField('painfulArc', v)}
-            />
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Painful Arc Start Degree
-              </label>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                max={180}
-                placeholder="e.g. 60"
-                value={form.painfulArcStartDeg}
-                onChange={(e) => updateField('painfulArcStartDeg', e.target.value)}
-                className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-gray-50 dark:bg-[#1C1C1E] border border-[#E5E5E5] dark:border-[#3A3A3C] text-base dark:text-white placeholder-gray-400"
-              />
-            </div>
-          </div>
+          {assessmentSections.map((section) => {
+            const isCollapsible = !!section.collapsible
+            const isOpen = !isCollapsible || collapsedSections[section.id] === true
 
-          {/* Empty Can */}
-          <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl p-5">
-            <PainSlider
-              label="Empty Can"
-              value={form.emptyCan}
-              onChange={(v) => updateField('emptyCan', v)}
-            />
-          </div>
-
-          {/* Resisted ER */}
-          <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl p-5">
-            <PainSlider
-              label="Resisted External Rotation"
-              value={form.resistedER}
-              onChange={(v) => updateField('resistedER', v)}
-            />
-          </div>
-
-          {/* Lift-Off */}
-          <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl p-5 space-y-4">
-            <PainSlider
-              label="Lift-Off Positioning"
-              value={form.liftOffPositioning}
-              onChange={(v) => updateField('liftOffPositioning', v)}
-            />
-            <PainSlider
-              label="Lift-Off Lifting"
-              value={form.liftOffLifting}
-              onChange={(v) => updateField('liftOffLifting', v)}
-            />
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Lift-Off Inches
-              </label>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                placeholder="e.g. 4"
-                value={form.liftOffInches}
-                onChange={(e) => updateField('liftOffInches', e.target.value)}
-                className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-gray-50 dark:bg-[#1C1C1E] border border-[#E5E5E5] dark:border-[#3A3A3C] text-base dark:text-white placeholder-gray-400"
-              />
-            </div>
-          </div>
-
-          {/* Cross-Body Adduction */}
-          <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl p-5">
-            <PainSlider
-              label="Cross-Body Adduction"
-              value={form.crossBodyAdduction}
-              onChange={(v) => updateField('crossBodyAdduction', v)}
-            />
-          </div>
-
-          {/* Jacket Test */}
-          <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl p-5">
-            <PainSlider
-              label="Jacket Test"
-              value={form.jacketTest}
-              onChange={(v) => updateField('jacketTest', v)}
-            />
-          </div>
-
-          {/* Dead Hang (optional) */}
-          <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl p-5 space-y-4">
-            <button
-              onClick={() => setShowDeadHang((p) => !p)}
-              className="flex items-center justify-between w-full min-h-[48px]"
-            >
-              <span className="text-sm font-semibold dark:text-white">Dead Hang (optional)</span>
-              <svg
-                viewBox="0 0 24 24"
-                className={`w-5 h-5 text-muted dark:text-muted-dark transition-transform ${showDeadHang ? 'rotate-180' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-            {showDeadHang && (
-              <div className="space-y-4">
-                <PainSlider
-                  label="Dead Hang"
-                  value={form.deadHangPain}
-                  onChange={(v) => updateField('deadHangPain', v)}
-                />
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Dead Hang Duration (seconds)
-                  </label>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    placeholder="e.g. 30"
-                    value={form.deadHangDuration}
-                    onChange={(e) => updateField('deadHangDuration', e.target.value)}
-                    className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-gray-50 dark:bg-[#1C1C1E] border border-[#E5E5E5] dark:border-[#3A3A3C] text-base dark:text-white placeholder-gray-400"
+            const renderField = (field) => {
+              if (field.type === 'pain_scale') {
+                return (
+                  <PainSlider
+                    key={field.id}
+                    label={field.label}
+                    value={form[field.id] || 0}
+                    onChange={(v) => updateField(field.id, v)}
                   />
+                )
+              }
+              if (field.type === 'number') {
+                return (
+                  <div key={field.id}>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      {field.label}
+                    </label>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={field.min ?? 0}
+                      max={field.max ?? undefined}
+                      placeholder={field.placeholder || ''}
+                      value={form[field.id] ?? ''}
+                      onChange={(e) => updateField(field.id, e.target.value)}
+                      className="w-full min-h-[48px] px-4 py-3 rounded-xl bg-gray-50 dark:bg-[#1C1C1E] border border-[#E5E5E5] dark:border-[#3A3A3C] text-base dark:text-white placeholder-gray-400"
+                    />
+                  </div>
+                )
+              }
+              if (field.type === 'select') {
+                return (
+                  <div key={field.id}>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                      {field.label}
+                    </label>
+                    <div className={`grid grid-cols-${Math.min(field.options.length, 3)} gap-2`}>
+                      {field.options.map((option) => (
+                        <button
+                          key={option}
+                          onClick={() => updateField(field.id, option)}
+                          className={`min-h-[48px] rounded-xl text-sm font-semibold transition-colors ${
+                            form[field.id] === option
+                              ? 'bg-teal text-white'
+                              : 'bg-gray-100 dark:bg-[#1C1C1E] text-gray-700 dark:text-gray-300 border border-[#E5E5E5] dark:border-[#3A3A3C]'
+                          }`}
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              }
+              if (field.type === 'text') {
+                return (
+                  <div key={field.id}>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      {field.label}
+                    </label>
+                    <textarea
+                      value={form[field.id] || ''}
+                      onChange={(e) => updateField(field.id, e.target.value)}
+                      rows={3}
+                      placeholder={field.placeholder || ''}
+                      className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-[#1C1C1E] border border-[#E5E5E5] dark:border-[#3A3A3C] text-base dark:text-white placeholder-gray-400 resize-none"
+                    />
+                  </div>
+                )
+              }
+              return null
+            }
+
+            if (isCollapsible) {
+              return (
+                <div key={section.id} className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl p-5 space-y-4">
+                  <button
+                    onClick={() => setCollapsedSections((prev) => ({ ...prev, [section.id]: !prev[section.id] }))}
+                    className="flex items-center justify-between w-full min-h-[48px]"
+                  >
+                    <span className="text-sm font-semibold dark:text-white">{section.label || section.id} (optional)</span>
+                    <svg
+                      viewBox="0 0 24 24"
+                      className={`w-5 h-5 text-muted dark:text-muted-dark transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  {isOpen && (
+                    <div className="space-y-4">
+                      {section.fields.map(renderField)}
+                    </div>
+                  )}
                 </div>
+              )
+            }
+
+            return (
+              <div key={section.id} className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl p-5 space-y-4">
+                {section.fields.map(renderField)}
               </div>
-            )}
-          </div>
-
-          {/* Average Daily Pain */}
-          <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl p-5">
-            <PainSlider
-              label="Average Daily Pain"
-              value={form.averageDailyPain}
-              onChange={(v) => updateField('averageDailyPain', v)}
-            />
-          </div>
-
-          {/* Sleep Quality */}
-          <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl p-5">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Sleep Quality
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {['Good', 'Fair', 'Poor'].map((quality) => (
-                <button
-                  key={quality}
-                  onClick={() => updateField('sleepQuality', quality)}
-                  className={`min-h-[48px] rounded-xl text-sm font-semibold transition-colors ${
-                    form.sleepQuality === quality
-                      ? 'bg-teal text-white'
-                      : 'bg-gray-100 dark:bg-[#1C1C1E] text-gray-700 dark:text-gray-300 border border-[#E5E5E5] dark:border-[#3A3A3C]'
-                  }`}
-                >
-                  {quality}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div className="bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl p-5">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Notes
-            </label>
-            <textarea
-              value={form.notes}
-              onChange={(e) => updateField('notes', e.target.value)}
-              rows={3}
-              placeholder="Any observations, triggers, changes..."
-              className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-[#1C1C1E] border border-[#E5E5E5] dark:border-[#3A3A3C] text-base dark:text-white placeholder-gray-400 resize-none"
-            />
-          </div>
+            )
+          })}
 
           {/* Save */}
           <button

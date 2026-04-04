@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { exercises } from '../data/exercises'
+import { useProgram } from '../config/ProgramContext'
 import { getSettings, logWorkout, getLogsForDate, updateLog, deleteLog } from '../db'
 import { today } from '../utils/dateUtils'
 import useTimer from '../hooks/useTimer'
@@ -15,6 +15,7 @@ import CueList from '../components/CueList'
 export default function ExerciseTimerScreen() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { exercises } = useProgram()
   const exercise = exercises.find((e) => e.id === id)
 
   const [settings, setSettings] = useState(null)
@@ -82,10 +83,9 @@ export default function ExerciseTimerScreen() {
   }, [id])
 
   // Determine exercise type
-  const isIsometric = exercise && exercise.holdSeconds && !exercise.reps
-  // Some exercises like scapular setting have both reps and holdSeconds
-  const isHybrid = exercise && exercise.reps && exercise.holdSeconds
-  const isRepBased = exercise && exercise.reps && !exercise.holdSeconds
+  const isIsometric = exercise?.timerType === 'isometric'
+  const isHybrid = exercise?.timerType === 'hybrid'
+  const isRepBased = exercise?.timerType === 'rep_based'
 
   const totalSets = exercise?.sets || 1
   const holdTime = exercise?.holdSeconds || 30
@@ -137,11 +137,11 @@ export default function ExerciseTimerScreen() {
     }
   }, [timer.currentSet])
 
-  // Halfway buzz for pendulums — signals time to switch circle direction
-  const isPendulums = exercise?.id === 'p1_pendulums'
-  const halfwayMs = isPendulums ? (holdTime * 1000) / 2 : 0
+  // Halfway buzz — signals time for halfway cue (e.g. switch direction)
+  const hasHalfwayCue = !!exercise?.halfwayCue
+  const halfwayMs = hasHalfwayCue ? (holdTime * 1000) / 2 : 0
   useEffect(() => {
-    if (!isPendulums) return
+    if (!hasHalfwayCue) return
     if (timer.state === 'holding' && timer.timeRemaining <= halfwayMs && timer.timeRemaining > halfwayMs - 500 && !halfwayFiredRef.current) {
       halfwayFiredRef.current = true
       if (settings?.timerSound) playSwitchTone()
@@ -152,7 +152,7 @@ export default function ExerciseTimerScreen() {
     if (timer.state !== 'holding' || timer.timeRemaining > halfwayMs + 500) {
       halfwayFiredRef.current = false
     }
-  }, [timer.state, timer.timeRemaining, settings, isPendulums, halfwayMs])
+  }, [timer.state, timer.timeRemaining, settings, hasHalfwayCue, halfwayMs])
 
   // Rep-based rest countdown — uses absolute end time so the display stays
   // accurate even if the app was backgrounded during the rest period.
@@ -566,10 +566,10 @@ export default function ExerciseTimerScreen() {
             state={timer.state}
           />
 
-          {/* Switch direction cue for pendulums */}
+          {/* Halfway cue (e.g. switch direction) */}
           {showSwitchCue && (
             <div className="mt-2 px-4 py-2 rounded-full bg-amber/15 border border-amber/30 text-amber font-semibold text-sm animate-pulse">
-              Switch direction
+              {exercise.halfwayCue}
             </div>
           )}
 

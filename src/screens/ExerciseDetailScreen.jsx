@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { exercises } from '../data/exercises'
+import { useProgram } from '../config/ProgramContext'
+import { buildCategoryColorMap } from '../config/schema'
 import { getLogsForExercise } from '../db'
 import { formatDate } from '../utils/dateUtils'
 
 export default function ExerciseDetailScreen() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { exercises, categories } = useProgram()
   const exercise = exercises.find((e) => e.id === id)
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(true)
@@ -37,12 +39,7 @@ export default function ExerciseDetailScreen() {
   }
 
   // Category pill colors
-  const categoryColors = {
-    isometric: 'bg-teal/10 text-teal dark:bg-teal/20 dark:text-teal-light',
-    isotonic: 'bg-amber/10 text-amber dark:bg-amber/20',
-    mobility: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-    functional: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-  }
+  const categoryColors = buildCategoryColorMap(categories)
 
   // Aggregate history by date for the last 7 unique dates
   const historyByDate = {}

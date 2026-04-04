@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { exercises } from '../data/exercises'
+import { useProgram } from '../config/ProgramContext'
 import { getAllLogs, getLogsForExercise, getLogsInRange, deleteLog } from '../db'
 import { today, formatDate } from '../utils/dateUtils'
 
@@ -23,6 +23,7 @@ function formatDuration(startTime, endTime) {
 
 export default function HistoryScreen() {
   const navigate = useNavigate()
+  const { exercises } = useProgram()
   const { exerciseId } = useParams()
   const [searchParams] = useSearchParams()
   const dateFilter = searchParams.get('date')

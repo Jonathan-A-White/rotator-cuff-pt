@@ -1,10 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { pullUpChecklist } from '../data/phases'
+import { useProgram } from '../config/ProgramContext'
+import { getPhaseChecklists } from '../config/schema'
 import { getChecklistState, setChecklistItem } from '../db'
 
 export default function ChecklistScreen() {
   const navigate = useNavigate()
+  const { phases } = useProgram()
+  const allChecklists = getPhaseChecklists(phases)
+  const checklistItems = allChecklists.flatMap(c => c.items)
+  const checklistTitle = allChecklists.length > 0 ? allChecklists[0].phaseName : 'Milestone Checklist'
   const [checkedItems, setCheckedItems] = useState({})
   const [loading, setLoading] = useState(true)
 
@@ -40,8 +45,8 @@ export default function ChecklistScreen() {
     }
   }
 
-  const completedCount = pullUpChecklist.filter((item) => checkedItems[item.id]).length
-  const totalCount = pullUpChecklist.length
+  const completedCount = checklistItems.filter((item) => checkedItems[item.id]).length
+  const totalCount = checklistItems.length
   const allComplete = completedCount === totalCount
 
   if (loading) {
@@ -65,7 +70,7 @@ export default function ChecklistScreen() {
             <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
-        <h1 className="text-2xl font-bold dark:text-white">Return-to-Pull-Ups</h1>
+        <h1 className="text-2xl font-bold dark:text-white">{checklistTitle}</h1>
       </div>
 
       {/* Progress summary */}
@@ -96,14 +101,14 @@ export default function ChecklistScreen() {
           </div>
           <h2 className="text-lg font-bold text-teal dark:text-teal-light mb-1">All Criteria Met!</h2>
           <p className="text-sm text-teal/80 dark:text-teal-light/80">
-            You have met all the prerequisites for returning to pull-ups. Progress carefully and listen to your body.
+            You have met all the prerequisites. Progress carefully and listen to your body.
           </p>
         </div>
       )}
 
       {/* Checklist items */}
       <div className="space-y-2">
-        {pullUpChecklist.map((item) => {
+        {checklistItems.map((item) => {
           const isChecked = !!checkedItems[item.id]
           return (
             <button

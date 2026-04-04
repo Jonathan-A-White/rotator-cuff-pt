@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { exercises } from '../data/exercises'
+import { useProgram } from '../config/ProgramContext'
+import { extractPainFields } from '../config/schema'
 import { getSettings, getLogsInRange, getAssessments, backfillPhaseStartDate } from '../db'
 import { today, daysAgo, getWeekDates, dayOfWeek, daysBetween } from '../utils/dateUtils'
 import { evaluatePhaseReadiness } from '../utils/phaseReadiness'
 
 export default function ProgressScreen() {
   const navigate = useNavigate()
+  const { exercises, phases, phaseMap, progressionRules, assessmentSections } = useProgram()
   const [settings, setSettings] = useState(null)
   const [logs, setLogs] = useState([])
   const [streak, setStreak] = useState(0)
@@ -38,7 +40,12 @@ export default function ProgressScreen() {
           s.phaseStartDate,
           today(),
           rangeLogs,
-          recentAssessments
+          recentAssessments,
+          {
+            exercises,
+            progressionRules,
+            painFields: extractPainFields(assessmentSections),
+          }
         )
         setReadiness(readinessResult)
 
@@ -118,12 +125,7 @@ export default function ProgressScreen() {
   })
 
   // Phase info
-  const phaseLabels = {
-    1: { name: 'Pain Reduction & Isometric Loading', weeks: 'Weeks 1-2' },
-    2: { name: 'Isotonic Strengthening', weeks: 'Weeks 3-6' },
-    3: { name: 'Pull-Up Return', weeks: 'Weeks 7-12+' },
-  }
-  const phaseInfo = phaseLabels[currentPhase]
+  const phaseInfo = phaseMap[currentPhase] || { name: '', weeks: '' }
 
   // SVG bar chart dimensions
   const chartHeight = 120
@@ -387,12 +389,12 @@ export default function ProgressScreen() {
           </svg>
         </button>
 
-        {currentPhase >= 3 && (
+        {phases.some(p => p.checklists?.length > 0) && currentPhase >= phases.find(p => p.checklists?.length > 0)?.id && (
           <button
             onClick={() => navigate('/checklist')}
             className="w-full min-h-[48px] bg-white dark:bg-[#2C2C2E] border border-[#E5E5E5] dark:border-[#3A3A3C] rounded-2xl px-5 py-4 flex items-center justify-between text-left"
           >
-            <span className="font-medium dark:text-white">Return-to-Pull-Ups Checklist</span>
+            <span className="font-medium dark:text-white">Milestone Checklist</span>
             <svg viewBox="0 0 24 24" className="w-5 h-5 text-muted dark:text-muted-dark" fill="none" stroke="currentColor" strokeWidth={2}>
               <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>

@@ -1,46 +1,3 @@
-import { exercises } from '../data/exercises'
-
-/**
- * Minimum days required in each phase before progression is considered.
- * Phase 1: 14 days (weeks 1-2), Phase 2: 28 days (weeks 3-6)
- */
-const MIN_DAYS_IN_PHASE = { 1: 14, 2: 28 }
-
-/**
- * Minimum exercise consistency percentage over the evaluation window.
- * "What % of days in the last 2 weeks did you complete all prescribed exercises?"
- */
-const MIN_CONSISTENCY_PCT = 70
-
-/**
- * Evaluation window in days for effort/consistency checks.
- */
-const EVAL_WINDOW_DAYS = 14
-
-/**
- * Maximum average pain score (across all assessment fields) to be considered "ready".
- */
-const MAX_AVG_PAIN = 2
-
-/**
- * Minimum number of assessments required within the evaluation window.
- */
-const MIN_ASSESSMENTS = 2
-
-/**
- * Pain fields from assessments that matter for phase readiness.
- */
-const PAIN_FIELDS = [
-  'painfulArc',
-  'emptyCan',
-  'resistedER',
-  'liftOffPositioning',
-  'liftOffLifting',
-  'crossBodyAdduction',
-  'jacketTest',
-  'averageDailyPain',
-]
-
 /**
  * Evaluate whether the user is ready to progress from their current phase.
  *
@@ -49,15 +6,22 @@ const PAIN_FIELDS = [
  * @param {string} todayStr - Today's ISO date string
  * @param {Array} recentLogs - Workout logs within the evaluation window
  * @param {Array} recentAssessments - Assessments within the evaluation window
- * @returns {{ canProgress: boolean, pillars: { time: object, effort: object, results: object } } | null}
- *   Returns null if already at Phase 3 (no further progression).
+ * @param {object} config
+ * @param {Array} config.exercises - array of exercise objects
+ * @param {object} config.progressionRules - { minDaysInPhase, minConsistencyPct, evalWindowDays, maxAvgPain, minAssessments, maxSinglePain }
+ * @param {Array<string>} config.painFields - array of pain metric field ID strings
+ * @param {number} [config.maxPhase] - highest phase number (defaults to max phase found in exercises)
+ * @returns {{ canProgress: boolean, nextPhase: number, pillars: { time: object, effort: object, results: object } } | null}
+ *   Returns null if already at the max phase (no further progression).
  */
-export function evaluatePhaseReadiness(currentPhase, phaseStartDate, todayStr, recentLogs, recentAssessments) {
-  if (currentPhase >= 3) return null
+export function evaluatePhaseReadiness(currentPhase, phaseStartDate, todayStr, recentLogs, recentAssessments, { exercises, progressionRules, painFields, maxPhase }) {
+  const effectiveMaxPhase = maxPhase ?? Math.max(...exercises.map((e) => e.phase))
 
-  const time = evaluateTime(currentPhase, phaseStartDate, todayStr)
-  const effort = evaluateEffort(currentPhase, recentLogs, todayStr)
-  const results = evaluateResults(recentAssessments)
+  if (currentPhase >= effectiveMaxPhase) return null
+
+  const time = evaluateTime(currentPhase, phaseStartDate, todayStr, progressionRules)
+  const effort = evaluateEffort(currentPhase, recentLogs, todayStr, exercises, progressionRules)
+  const results = evaluateResults(recentAssessments, progressionRules, painFields)
 
   return {
     canProgress: time.met && effort.met && results.met,
@@ -66,8 +30,8 @@ export function evaluatePhaseReadiness(currentPhase, phaseStartDate, todayStr, r
   }
 }
 
-function evaluateTime(phase, phaseStartDate, todayStr) {
-  const required = MIN_DAYS_IN_PHASE[phase] || 14
+function evaluateTime(phase, phaseStartDate, todayStr, progressionRules) {
+  const required = (progressionRules.minDaysInPhase && progressionRules.minDaysInPhase[phase]) || 14
   if (!phaseStartDate) {
     return { met: false, label: 'Time in Phase', current: 0, required, unit: 'days' }
   }
@@ -81,15 +45,16 @@ function evaluateTime(phase, phaseStartDate, todayStr) {
   }
 }
 
-function evaluateEffort(phase, recentLogs, todayStr) {
+function evaluateEffort(phase, recentLogs, todayStr, exercises, progressionRules) {
+  const { minConsistencyPct, evalWindowDays } = progressionRules
   const phaseExercises = exercises.filter((e) => e.phase <= phase)
   if (phaseExercises.length === 0) {
-    return { met: false, label: 'Consistency', current: 0, required: MIN_CONSISTENCY_PCT, unit: '%' }
+    return { met: false, label: 'Consistency', current: 0, required: minConsistencyPct, unit: '%' }
   }
 
-  // Count how many of the last EVAL_WINDOW_DAYS had all exercises completed
+  // Count how many of the last evalWindowDays had all exercises completed
   let daysWithFullCompletion = 0
-  for (let i = 0; i < EVAL_WINDOW_DAYS; i++) {
+  for (let i = 0; i < evalWindowDays; i++) {
     const dateStr = subtractDays(todayStr, i)
     const dayLogs = recentLogs.filter((l) => l.date === dateStr)
 
@@ -103,53 +68,55 @@ function evaluateEffort(phase, recentLogs, todayStr) {
     if (allDone) daysWithFullCompletion++
   }
 
-  const current = Math.round((daysWithFullCompletion / EVAL_WINDOW_DAYS) * 100)
+  const current = Math.round((daysWithFullCompletion / evalWindowDays) * 100)
   return {
-    met: current >= MIN_CONSISTENCY_PCT,
+    met: current >= minConsistencyPct,
     label: 'Consistency',
     current,
-    required: MIN_CONSISTENCY_PCT,
+    required: minConsistencyPct,
     unit: '%',
-    detail: `${daysWithFullCompletion}/${EVAL_WINDOW_DAYS} days fully completed`,
+    detail: `${daysWithFullCompletion}/${evalWindowDays} days fully completed`,
   }
 }
 
-function evaluateResults(recentAssessments) {
-  if (recentAssessments.length < MIN_ASSESSMENTS) {
+function evaluateResults(recentAssessments, progressionRules, painFields) {
+  const { maxAvgPain, minAssessments, maxSinglePain } = progressionRules
+
+  if (recentAssessments.length < minAssessments) {
     return {
       met: false,
       label: 'Pain Levels',
       current: null,
-      required: MAX_AVG_PAIN,
+      required: maxAvgPain,
       unit: '/10',
-      detail: `${recentAssessments.length}/${MIN_ASSESSMENTS} assessments recorded`,
+      detail: `${recentAssessments.length}/${minAssessments} assessments recorded`,
       needsMore: true,
     }
   }
 
   // Use the most recent assessment's pain scores
   const latest = recentAssessments[0] // already sorted most-recent-first
-  const painValues = PAIN_FIELDS
+  const painValues = painFields
     .map((f) => latest[f])
     .filter((v) => v != null && typeof v === 'number')
 
   if (painValues.length === 0) {
-    return { met: false, label: 'Pain Levels', current: null, required: MAX_AVG_PAIN, unit: '/10', detail: 'No pain data in latest assessment' }
+    return { met: false, label: 'Pain Levels', current: null, required: maxAvgPain, unit: '/10', detail: 'No pain data in latest assessment' }
   }
 
   const avg = painValues.reduce((s, v) => s + v, 0) / painValues.length
-  const maxSingle = Math.max(...painValues)
+  const highestSingle = Math.max(...painValues)
   const current = Math.round(avg * 10) / 10
 
   return {
-    met: maxSingle <= 3 && avg <= MAX_AVG_PAIN,
+    met: highestSingle <= maxSinglePain && avg <= maxAvgPain,
     label: 'Pain Levels',
     current,
-    required: MAX_AVG_PAIN,
+    required: maxAvgPain,
     unit: '/10 avg',
-    detail: maxSingle > 3
-      ? `Highest single score: ${maxSingle}/10`
-      : `All scores ≤3, avg ${current}/10`,
+    detail: highestSingle > maxSinglePain
+      ? `Highest single score: ${highestSingle}/10`
+      : `All scores ≤${maxSinglePain}, avg ${current}/10`,
   }
 }
 
