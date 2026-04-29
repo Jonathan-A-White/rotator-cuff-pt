@@ -6,7 +6,7 @@ import {
   saveProgram,
   getProgram,
   getAllPrograms,
-  deleteProgram,
+  deleteProgramAndData,
   getSettings,
   saveSettings,
 } from '../db'
@@ -137,7 +137,7 @@ export function ProgramProvider({ children }) {
 
   const removeSavedProgram = useCallback(async (id) => {
     if (!id || id === DEFAULT_PROGRAM_ID) return
-    await deleteProgram(id)
+    await deleteProgramAndData(id)
     if (program.id === id) {
       await setActiveProgramIdInSettings(null)
       setProgram(buildDefaultProgram())
