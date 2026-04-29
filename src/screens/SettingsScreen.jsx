@@ -541,14 +541,14 @@ export default function SettingsScreen({ onDarkModeChange }) {
                     <button
                       onClick={() => handleSelectProgram(p.id)}
                       aria-pressed={isActive}
-                      className={`flex-1 min-h-[48px] rounded-xl px-4 py-3 text-left text-sm font-medium border transition-colors ${
+                      className={`flex-1 min-w-0 min-h-[48px] rounded-xl px-4 py-3 text-left text-sm font-medium border transition-colors ${
                         isActive
                           ? 'bg-teal text-white border-teal'
                           : 'bg-gray-100 dark:bg-[#1C1C1E] text-gray-700 dark:text-gray-300 border-[#E5E5E5] dark:border-[#3A3A3C]'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="truncate">{p.name}</span>
+                        <span className="flex-1 min-w-0 truncate">{p.name}</span>
                         <span className={`text-xs flex-shrink-0 ${isActive ? 'text-white/80' : 'text-muted dark:text-muted-dark'}`}>
                           {p.builtIn ? 'Built-in' : isActive ? 'Active' : 'Imported'}
                         </span>
