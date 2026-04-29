@@ -41,12 +41,21 @@ function SettingRow({ label, description, children }) {
 
 export default function SettingsScreen({ onDarkModeChange }) {
   const navigate = useNavigate()
-  const { phases, program, switchProgram, resetToDefault } = useProgram()
+  const {
+    phases,
+    program,
+    availablePrograms,
+    switchProgram,
+    switchToProgramId,
+    resetToDefault,
+    removeSavedProgram,
+  } = useProgram()
   const [settings, setSettings] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showPhaseConfirm, setShowPhaseConfirm] = useState(null) // phase number or null
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [showImportConfirm, setShowImportConfirm] = useState(null) // { data, fileName } or null
+  const [showRemoveProgramConfirm, setShowRemoveProgramConfirm] = useState(null) // { id, name } or null
   const [importStatus, setImportStatus] = useState(null) // { type: 'success'|'error', message: string } | null
   const [exportStatus, setExportStatus] = useState(null) // 'success' | 'error' | null
 
@@ -186,6 +195,32 @@ export default function SettingsScreen({ onDarkModeChange }) {
       setImportStatus({ type: 'error', message: 'Import failed. Your previous data has been restored.' })
       setTimeout(() => setImportStatus(null), 5000)
     }
+  }
+
+  async function handleSelectProgram(id) {
+    if (id === program.id) return
+    const result = await switchToProgramId(id)
+    if (result.success) {
+      const target = availablePrograms.find((p) => p.id === id)
+      setImportStatus({ type: 'success', message: `Switched to "${target?.name || id}".` })
+    } else {
+      setImportStatus({ type: 'error', message: `Failed to switch: ${result.errors.join(', ')}` })
+    }
+    setTimeout(() => setImportStatus(null), 3000)
+  }
+
+  async function handleRemoveProgram() {
+    const target = showRemoveProgramConfirm
+    setShowRemoveProgramConfirm(null)
+    if (!target) return
+    try {
+      await removeSavedProgram(target.id)
+      setImportStatus({ type: 'success', message: `Removed "${target.name}".` })
+    } catch (err) {
+      console.error('Remove program failed:', err)
+      setImportStatus({ type: 'error', message: 'Failed to remove the program.' })
+    }
+    setTimeout(() => setImportStatus(null), 3000)
   }
 
   async function handleClearAll() {
@@ -435,6 +470,33 @@ export default function SettingsScreen({ onDarkModeChange }) {
         </button>
       </div>
 
+      {/* Remove program confirmation dialog */}
+      {showRemoveProgramConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-[#2C2C2E] rounded-2xl p-6 max-w-sm w-full shadow-xl">
+            <h3 className="text-lg font-bold mb-2 dark:text-white">Remove this program?</h3>
+            <p className="text-sm text-muted dark:text-muted-dark mb-6">
+              <span className="font-medium dark:text-white">{showRemoveProgramConfirm.name}</span> will be deleted from this device.
+              {showRemoveProgramConfirm.id === program.id && ' The app will switch back to the built-in program.'}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowRemoveProgramConfirm(null)}
+                className="flex-1 min-h-[48px] rounded-xl text-sm font-semibold bg-gray-100 dark:bg-[#1C1C1E] text-gray-700 dark:text-gray-300 border border-[#E5E5E5] dark:border-[#3A3A3C]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRemoveProgram}
+                className="flex-1 min-h-[48px] rounded-xl text-sm font-semibold bg-red text-white"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Clear confirmation dialog */}
       {showClearConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -467,6 +529,46 @@ export default function SettingsScreen({ onDarkModeChange }) {
         <p className="text-sm text-muted dark:text-muted-dark">
           Current: <span className="font-medium dark:text-white">{program.name}</span>
         </p>
+
+        {availablePrograms.length > 1 && (
+          <div className="space-y-2">
+            <p className="text-xs text-muted dark:text-muted-dark">Tap to switch programs.</p>
+            <ul className="space-y-2">
+              {availablePrograms.map((p) => {
+                const isActive = p.id === program.id
+                return (
+                  <li key={p.id} className="flex items-stretch gap-2">
+                    <button
+                      onClick={() => handleSelectProgram(p.id)}
+                      aria-pressed={isActive}
+                      className={`flex-1 min-h-[48px] rounded-xl px-4 py-3 text-left text-sm font-medium border transition-colors ${
+                        isActive
+                          ? 'bg-teal text-white border-teal'
+                          : 'bg-gray-100 dark:bg-[#1C1C1E] text-gray-700 dark:text-gray-300 border-[#E5E5E5] dark:border-[#3A3A3C]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate">{p.name}</span>
+                        <span className={`text-xs flex-shrink-0 ${isActive ? 'text-white/80' : 'text-muted dark:text-muted-dark'}`}>
+                          {p.builtIn ? 'Built-in' : isActive ? 'Active' : 'Imported'}
+                        </span>
+                      </div>
+                    </button>
+                    {!p.builtIn && (
+                      <button
+                        onClick={() => setShowRemoveProgramConfirm({ id: p.id, name: p.name })}
+                        aria-label={`Remove ${p.name}`}
+                        className="min-h-[48px] min-w-[48px] rounded-xl text-sm font-semibold bg-red/10 text-red border border-red/20"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )}
 
         <button
           onClick={() => {
