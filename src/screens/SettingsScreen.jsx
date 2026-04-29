@@ -476,7 +476,7 @@ export default function SettingsScreen({ onDarkModeChange }) {
           <div className="bg-white dark:bg-[#2C2C2E] rounded-2xl p-6 max-w-sm w-full shadow-xl">
             <h3 className="text-lg font-bold mb-2 dark:text-white">Remove this program?</h3>
             <p className="text-sm text-muted dark:text-muted-dark mb-6">
-              <span className="font-medium dark:text-white">{showRemoveProgramConfirm.name}</span> will be deleted from this device.
+              <span className="font-medium dark:text-white">{showRemoveProgramConfirm.name}</span> and all of its workout logs and assessments will be permanently deleted from this device. This cannot be undone.
               {showRemoveProgramConfirm.id === program.id && ' The app will switch back to the built-in program.'}
             </p>
             <div className="flex gap-3">

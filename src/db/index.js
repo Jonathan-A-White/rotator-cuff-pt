@@ -71,9 +71,38 @@ export async function getAllPrograms() {
   return db.getAll("programs");
 }
 
-export async function deleteProgram(programId) {
+/**
+ * Delete a program and every workoutLog/assessment tagged with its programId,
+ * all in a single transaction so partial failure cannot leave orphans.
+ */
+export async function deleteProgramAndData(programId) {
+  if (!programId) return;
   const db = await getDB();
-  await db.delete("programs", programId);
+  const tx = db.transaction(
+    ["programs", "workoutLogs", "assessments"],
+    "readwrite",
+  );
+  const programs = tx.objectStore("programs");
+  const workoutLogs = tx.objectStore("workoutLogs");
+  const assessments = tx.objectStore("assessments");
+
+  const [allLogs, allAssessments] = await Promise.all([
+    workoutLogs.getAll(),
+    assessments.getAll(),
+  ]);
+
+  await programs.delete(programId);
+  for (const log of allLogs) {
+    if (log.programId === programId) {
+      await workoutLogs.delete(log.id);
+    }
+  }
+  for (const a of allAssessments) {
+    if (a.programId === programId) {
+      await assessments.delete(a.id);
+    }
+  }
+  await tx.done;
 }
 
 /**
