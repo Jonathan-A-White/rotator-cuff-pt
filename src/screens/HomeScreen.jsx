@@ -7,7 +7,7 @@ import ExerciseCard from '../components/ExerciseCard'
 
 export default function HomeScreen() {
   const navigate = useNavigate()
-  const { exercises, phaseMap } = useProgram()
+  const { program, exercises, phaseMap } = useProgram()
   const [currentPhase, setCurrentPhase] = useState(1)
   const [logs, setLogs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -44,9 +44,9 @@ export default function HomeScreen() {
 
   // Add a manual set (edit mode +)
   const handleAddSet = useCallback(async (exerciseId) => {
-    await addManualLog(exerciseId, today())
+    await addManualLog(exerciseId, today(), program.id)
     await reloadLogs()
-  }, [reloadLogs])
+  }, [reloadLogs, program.id])
 
   // Smart-remove a set (edit mode -)
   const handleRemoveSet = useCallback(async (exerciseId) => {

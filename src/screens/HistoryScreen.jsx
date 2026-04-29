@@ -23,7 +23,7 @@ function formatDuration(startTime, endTime) {
 
 export default function HistoryScreen() {
   const navigate = useNavigate()
-  const { exercises } = useProgram()
+  const { program, exercises } = useProgram()
   const { exerciseId } = useParams()
   const [searchParams] = useSearchParams()
   const dateFilter = searchParams.get('date')
@@ -34,6 +34,7 @@ export default function HistoryScreen() {
 
   const exercise = exerciseId ? exercises.find((e) => e.id === exerciseId) : null
   const exerciseMap = Object.fromEntries(exercises.map((e) => [e.id, e]))
+  const programId = program.id
 
   const loadLogs = useCallback(async () => {
     try {
@@ -45,6 +46,15 @@ export default function HistoryScreen() {
       } else {
         fetched = await getAllLogs()
       }
+      // Only show logs for the active program. Legacy logs with no programId
+      // are attributed to the current program when their exerciseId belongs
+      // to it, so existing history isn't lost after this change.
+      const currentExerciseIds = new Set(exercises.map((e) => e.id))
+      fetched = fetched.filter((log) =>
+        log.programId
+          ? log.programId === programId
+          : currentExerciseIds.has(log.exerciseId)
+      )
       // Sort by timestamp descending
       fetched.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
       setLogs(fetched)
@@ -53,7 +63,7 @@ export default function HistoryScreen() {
     } finally {
       setLoading(false)
     }
-  }, [exerciseId, dateFilter])
+  }, [exerciseId, dateFilter, programId, exercises])
 
   useEffect(() => {
     loadLogs()

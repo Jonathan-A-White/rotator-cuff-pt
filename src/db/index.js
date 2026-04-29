@@ -272,7 +272,7 @@ export async function updateLog(logId, updates) {
  * Add a manual log entry (from edit mode).
  * Creates a single entry with source "manual" and setsCompleted = 1.
  */
-export async function addManualLog(exerciseId, dateStr) {
+export async function addManualLog(exerciseId, dateStr, programId = null) {
   const now = Date.now();
   return logWorkout({
     date: dateStr,
@@ -282,6 +282,7 @@ export async function addManualLog(exerciseId, dateStr) {
     timestamp: now,
     startTime: now,
     endTime: now,
+    programId,
   });
 }
 
