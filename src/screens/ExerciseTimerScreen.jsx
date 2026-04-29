@@ -15,7 +15,7 @@ import CueList from '../components/CueList'
 export default function ExerciseTimerScreen() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { exercises } = useProgram()
+  const { program, exercises } = useProgram()
   const exercise = exercises.find((e) => e.id === id)
 
   const [settings, setSettings] = useState(null)
@@ -219,6 +219,7 @@ export default function ExerciseTimerScreen() {
               source: 'timer',
               startTime: sessionStartTimeRef.current || now,
               endTime: now,
+              programId: program.id,
             }).then((entry) => {
               backgroundSaveIdRef.current = entry.id
             })
@@ -242,7 +243,7 @@ export default function ExerciseTimerScreen() {
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [id, repResting])
+  }, [id, repResting, program.id])
 
   // Intercept the Android / OS back button so that completed sets are saved.
   // Without this, the OS back button triggers history.back() which unmounts
@@ -377,11 +378,12 @@ export default function ExerciseTimerScreen() {
         source: 'timer',
         startTime: sessionStartTimeRef.current || now,
         endTime: now,
+        programId: program.id,
       })
     }
 
     navigate('/')
-  }, [navigate, wakeLock, isIsometric, isHybrid, isRepBased, timer.state, timer.currentSet, repSet, id, completed, painLevel, notes])
+  }, [navigate, wakeLock, isIsometric, isHybrid, isRepBased, timer.state, timer.currentSet, repSet, id, completed, painLevel, notes, program.id])
 
   // Auto-save the workout immediately when the exercise completes so that
   // closing the app without tapping "Save & Back" doesn't lose the sets.
@@ -398,11 +400,12 @@ export default function ExerciseTimerScreen() {
         source: 'timer',
         startTime: sessionStartTimeRef.current || now,
         endTime: now,
+        programId: program.id,
       }).then((entry) => {
         savedLogIdRef.current = entry.id
       })
     }
-  }, [completed, id, totalSets])
+  }, [completed, id, totalSets, program.id])
 
   // Keep the ref in sync so the popstate listener always calls the latest version
   handleBackRef.current = handleBack
