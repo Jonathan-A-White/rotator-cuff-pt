@@ -1,0 +1,147 @@
+{
+  "id": "scapula-shoulder-v1",
+  "name": "Scapula & Shoulder",
+  "description": "Scapula & Shoulder program for the left shoulder — AAROM flexion and external rotation, scapular rowing, and internal rotation ROM. Assigned by Lee Rosenzweig on 06/25/26.",
+  "version": "1.0.0",
+  "author": "Lee Rosenzweig",
+  "bodyRegion": "shoulder",
+  "condition": "Left shoulder — scapula & shoulder rehab",
+
+  "phases": [
+    {
+      "id": 1,
+      "name": "Scapula & Shoulder",
+      "rules": [
+        "Perform all exercises as instructed by your therapist",
+        "Movements should feel like a gentle stretch, not sharp pain",
+        "Use the right arm to assist the left during AAROM exercises",
+        "Return slowly to the starting position after each rep"
+      ],
+      "checklists": []
+    }
+  ],
+
+  "exercises": [
+    {
+      "id": "p1_shoulder_flexion_aarom",
+      "name": "Shoulder Flexion AAROM with Opposite Arm - Left",
+      "shortName": "Flexion AAROM",
+      "phase": 1,
+      "category": "mobility",
+      "timerType": "hybrid",
+      "sets": 3,
+      "reps": 10,
+      "holdSeconds": 10,
+      "description": "Starting Position: Lie on your back with your left arm resting on a towel, and your elbow bent. Grasp your left wrist with your right hand. Action: Using your right arm to assist, raise your left arm up, straightening your elbow. Then move your left arm overhead until you feel a gentle stretch in your shoulder. Hold as instructed. Return to the starting position.",
+      "cues": [
+        "Lie on back, left arm on towel, elbow bent",
+        "Grasp left wrist with right hand",
+        "Right arm assists left arm up and overhead",
+        "Gentle stretch in shoulder — hold 10 sec",
+        "Return slowly to start"
+      ],
+      "emoji": "🙆",
+      "sortOrder": 1
+    },
+    {
+      "id": "p1_shoulder_er_aarom_cane",
+      "name": "Shoulder External Rotation AAROM with Cane in Scapular Plane - Left",
+      "shortName": "ER AAROM w/ Cane",
+      "phase": 1,
+      "category": "mobility",
+      "timerType": "hybrid",
+      "sets": 3,
+      "reps": 10,
+      "holdSeconds": 10,
+      "description": "Starting Position: Lie on your back with your left arm resting on a towel slightly away from your side, and your elbow bent. Hold a cane or stick with both hands with your left palm facing your body. Action: Using your right hand to assist, gently push the cane or stick in order to rotate your left hand and forearm away from your body. Hold as instructed. Return to the starting position.",
+      "cues": [
+        "Lie on back, left arm on towel, slightly away from side",
+        "Hold cane with both hands, left palm facing body",
+        "Right hand pushes cane to rotate left forearm outward",
+        "Hold 10 sec",
+        "Return slowly to start"
+      ],
+      "emoji": "🥢",
+      "sortOrder": 2
+    },
+    {
+      "id": "p1_row",
+      "name": "Row",
+      "shortName": "Row",
+      "phase": 1,
+      "category": "isotonic",
+      "timerType": "rep_based",
+      "sets": 3,
+      "reps": 10,
+      "description": "Starting Position: Attach a resistance band to a fixed object in front of you. Stand facing the bands and hold one end in each hand with your arms straight. Action: Tighten your abs and squeeze your shoulder blades together and down as you pull your elbows back towards your sides. Return to the starting position.",
+      "cues": [
+        "Band anchored in front, one end in each hand",
+        "Arms straight to start",
+        "Tighten abs",
+        "Squeeze shoulder blades together and down",
+        "Pull elbows back to sides, then return"
+      ],
+      "emoji": "🚣",
+      "sortOrder": 3
+    },
+    {
+      "id": "p1_shoulder_ir_towel_pass",
+      "name": "Shoulder Internal Rotation ROM Towel Pass - Left",
+      "shortName": "IR Towel Pass",
+      "phase": 1,
+      "category": "mobility",
+      "timerType": "rep_based",
+      "sets": 3,
+      "reps": 10,
+      "description": "Starting Position: Stand with your feet hip width apart. Hold a towel roll in your left hand. Action: Bring your left arm behind your back until you feel a gentle stretch in your left shoulder. Take the towel with your right hand, bring it back in front of your body and pass it back to your left hand.",
+      "cues": [
+        "Stand feet hip width apart, towel roll in left hand",
+        "Bring left arm behind back",
+        "Gentle stretch in left shoulder",
+        "Pass towel to right hand, bring to front",
+        "Pass back to left hand and repeat"
+      ],
+      "emoji": "🧻",
+      "sortOrder": 4
+    }
+  ],
+
+  "assessmentSections": [
+    {
+      "id": "averageDailyPain",
+      "fields": [
+        { "id": "averageDailyPain", "label": "Average Daily Pain", "type": "pain_scale", "isPainMetric": true }
+      ]
+    },
+    {
+      "id": "shoulderFlexionStretch",
+      "fields": [
+        { "id": "flexionStretchPain", "label": "Pain at Top of Overhead Stretch", "type": "pain_scale", "isPainMetric": true }
+      ]
+    },
+    {
+      "id": "behindBackReach",
+      "fields": [
+        { "id": "behindBackPain", "label": "Pain Reaching Behind Back", "type": "pain_scale", "isPainMetric": true }
+      ]
+    },
+    {
+      "id": "sleepQuality",
+      "fields": [
+        { "id": "sleepQuality", "label": "Sleep Quality", "type": "select", "options": ["Good", "Fair", "Poor"], "defaultValue": "Good" }
+      ]
+    },
+    {
+      "id": "notes",
+      "fields": [
+        { "id": "notes", "label": "Notes", "type": "text", "placeholder": "Any observations, triggers, changes..." }
+      ]
+    }
+  ],
+
+  "assessmentSummaryFields": [
+    { "key": "averageDailyPain", "label": "Avg Daily Pain" },
+    { "key": "flexionStretchPain", "label": "Overhead Stretch" },
+    { "key": "behindBackPain", "label": "Behind-Back" }
+  ]
+}
