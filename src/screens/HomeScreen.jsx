@@ -1,17 +1,49 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useProgram } from '../config/ProgramContext'
 import { getSettings, getLogsForDate, addManualLog, decrementLatestLog } from '../db'
 import { today } from '../utils/dateUtils'
+import { orderExercises, byProgramOrder } from '../utils/exerciseOrder'
+import useFlipReorder from '../hooks/useFlipReorder'
 import ExerciseCard from '../components/ExerciseCard'
+
+/** How long a just-finished exercise sits in place before dropping down. */
+const SINK_DELAY_MS = 500
 
 export default function HomeScreen() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { program, exercises, phaseMap } = useProgram()
   const [currentPhase, setCurrentPhase] = useState(1)
   const [logs, setLogs] = useState([])
   const [loading, setLoading] = useState(true)
   const [editMode, setEditMode] = useState(false)
+  const registerCard = useFlipReorder()
+
+  // The timer screen hands back the exercise it just came from. We render that
+  // card in its old spot for a beat so the drop is something you actually see,
+  // rather than it having silently moved while the timer was open.
+  const [pinnedId, setPinnedId] = useState(() => location.state?.justCompleted ?? null)
+
+  // Consume the hand-off so a re-entry (or browser back) doesn't replay it.
+  useEffect(() => {
+    if (location.state?.justCompleted) {
+      navigate(location.pathname, { replace: true, state: null })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Release the pin once the list is on screen — that render is the animation.
+  useEffect(() => {
+    if (!pinnedId || loading) return
+    const timer = setTimeout(() => setPinnedId(null), SINK_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [pinnedId, loading])
+
+  // Order is held steady while Edit mode is open so a card never slides away
+  // mid-tap as you use the +/- buttons. It re-sorts when you tap Done.
+  const [frozenOrder, setFrozenOrder] = useState(null)
+  const displayedIdsRef = useRef([])
 
   useEffect(() => {
     let cancelled = false
@@ -54,10 +86,18 @@ export default function HomeScreen() {
     await reloadLogs()
   }, [reloadLogs])
 
+  // Toggle Edit mode, snapshotting the on-screen order for the duration
+  const toggleEditMode = useCallback(() => {
+    setEditMode((wasOn) => {
+      setFrozenOrder(wasOn ? null : displayedIdsRef.current)
+      return !wasOn
+    })
+  }, [])
+
   // Phase is cumulative: phase 2 shows phase 1+2, phase 3 shows all
   const phaseExercises = exercises
     .filter((ex) => ex.phase <= currentPhase)
-    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .sort(byProgramOrder)
 
   // Calculate sets completed per exercise from today's logs
   const setsCompletedMap = {}
@@ -67,6 +107,13 @@ export default function HomeScreen() {
     }
     setsCompletedMap[log.exerciseId] += log.setsCompleted || 0
   })
+
+  // Finished exercises sink below the ones still to do
+  const displayExercises = orderExercises(phaseExercises, setsCompletedMap, {
+    frozenOrder,
+    pinnedId,
+  })
+  displayedIdsRef.current = displayExercises.map((ex) => ex.id)
 
   // Daily summary calculations – each exercise counts equally regardless of
   // how many sets it requires (completing 1/1 = completing 5/5).
@@ -131,7 +178,7 @@ export default function HomeScreen() {
           Today&apos;s Exercises
         </h2>
         <button
-          onClick={() => setEditMode((v) => !v)}
+          onClick={toggleEditMode}
           className={`text-sm font-medium px-3 py-1 rounded-lg transition-colors ${
             editMode
               ? 'bg-teal text-white'
@@ -150,17 +197,18 @@ export default function HomeScreen() {
         </div>
       ) : (
         <div className="space-y-3">
-          {phaseExercises.map((exercise) => (
-            <ExerciseCard
-              key={exercise.id}
-              exercise={exercise}
-              setsCompleted={setsCompletedMap[exercise.id] || 0}
-              onStart={() => navigate(`/exercise/${exercise.id}`)}
-              onDetail={() => navigate(`/exercise/${exercise.id}/detail`)}
-              editMode={editMode}
-              onAddSet={() => handleAddSet(exercise.id)}
-              onRemoveSet={() => handleRemoveSet(exercise.id)}
-            />
+          {displayExercises.map((exercise) => (
+            <div key={exercise.id} ref={registerCard(exercise.id)}>
+              <ExerciseCard
+                exercise={exercise}
+                setsCompleted={setsCompletedMap[exercise.id] || 0}
+                onStart={() => navigate(`/exercise/${exercise.id}`)}
+                onDetail={() => navigate(`/exercise/${exercise.id}/detail`)}
+                editMode={editMode}
+                onAddSet={() => handleAddSet(exercise.id)}
+                onRemoveSet={() => handleRemoveSet(exercise.id)}
+              />
+            </div>
           ))}
         </div>
       )}
