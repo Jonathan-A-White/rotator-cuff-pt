@@ -35,6 +35,12 @@ export default function ExerciseTimerScreen() {
   // Track when the exercise session actually started (first Start press)
   const sessionStartTimeRef = useRef(null)
 
+  // Return to the home list, telling it which exercise we just came from so a
+  // newly-finished card can visibly drop below the ones still to do.
+  const goHome = useCallback(() => {
+    navigate('/', { state: { justCompleted: id } })
+  }, [navigate, id])
+
   const audioInitRef = useRef(false)
   const halfwayFiredRef = useRef(false)
   // Absolute end time for rep-based rest so the countdown stays accurate
@@ -327,8 +333,8 @@ export default function ExerciseTimerScreen() {
         ...(notes.trim() ? { notes: notes.trim() } : {}),
       })
     }
-    navigate('/')
-  }, [painLevel, notes, navigate])
+    goHome()
+  }, [painLevel, notes, goHome])
 
   // Handle back navigation — auto-save partial progress.
   // If the exercise is already completed, the auto-save effect has already
@@ -342,12 +348,12 @@ export default function ExerciseTimerScreen() {
           ...(notes.trim() ? { notes: notes.trim() } : {}),
         })
       }
-      navigate('/')
+      goHome()
       return
     }
 
     if (savedRef.current) {
-      navigate('/')
+      goHome()
       return
     }
     savedRef.current = true
@@ -357,7 +363,7 @@ export default function ExerciseTimerScreen() {
     // and just navigate. Otherwise compute and save now.
     if (backgroundSaveIdRef.current) {
       backgroundSaveIdRef.current = null // prevent the visible handler from deleting it
-      navigate('/')
+      goHome()
       return
     }
 
@@ -382,8 +388,8 @@ export default function ExerciseTimerScreen() {
       })
     }
 
-    navigate('/')
-  }, [navigate, wakeLock, isIsometric, isHybrid, isRepBased, timer.state, timer.currentSet, repSet, id, completed, painLevel, notes, program.id])
+    goHome()
+  }, [goHome, wakeLock, isIsometric, isHybrid, isRepBased, timer.state, timer.currentSet, repSet, id, completed, painLevel, notes, program.id])
 
   // Auto-save the workout immediately when the exercise completes so that
   // closing the app without tapping "Save & Back" doesn't lose the sets.

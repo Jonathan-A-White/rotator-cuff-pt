@@ -63,11 +63,12 @@ export default function ExerciseCard({
   return (
     <div
       className={`
-        relative rounded-xl p-4 shadow-sm
-        bg-white dark:bg-[#2C2C2E]
-        border border-gray-200 dark:border-[#3A3A3C]
-        transition-colors duration-150
-        ${isComplete ? 'bg-teal-50/40 dark:bg-teal-900/10 border-teal/30' : ''}
+        relative rounded-xl p-4
+        border transition-[opacity,background-color,border-color] duration-300
+        ${isComplete
+          ? 'opacity-65 shadow-none bg-gray-50 dark:bg-[#242426] border-gray-200 dark:border-[#3A3A3C]'
+          : 'shadow-sm bg-white dark:bg-[#2C2C2E] border-gray-200 dark:border-[#3A3A3C]'
+        }
       `}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
@@ -76,14 +77,21 @@ export default function ExerciseCard({
       {/* Top row: emoji + info + detail button */}
       <div className="flex items-start gap-3">
         {/* Emoji */}
-        <span className="text-3xl leading-none select-none" aria-hidden="true">
+        <span
+          className={`text-3xl leading-none select-none transition-[filter] duration-300 ${
+            isComplete ? 'grayscale' : ''
+          }`}
+          aria-hidden="true"
+        >
           {emoji}
         </span>
 
         {/* Name + description */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="text-base font-semibold truncate">
+            <h3 className={`text-base font-semibold truncate ${
+              isComplete ? 'text-muted dark:text-muted-dark' : ''
+            }`}>
               {name}
             </h3>
             {isComplete && (
