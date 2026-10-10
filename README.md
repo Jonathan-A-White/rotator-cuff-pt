@@ -59,6 +59,10 @@ npm run android:run
 
 This builds, syncs, and launches on a connected device or emulator in one step.
 
+## Documentation
+
+- [Module map](docs/module-map.md): the modules, the files most changes collide on, proposed refactors, library candidates
+
 ## Development
 
 ```bash
