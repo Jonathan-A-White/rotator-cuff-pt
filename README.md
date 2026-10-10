@@ -4,6 +4,8 @@ A Progressive Web App for tracking rotator cuff rehabilitation exercises across 
 
 All data is stored locally on your device (IndexedDB). No server, no tracking, no account required.
 
+How the app measures against the PWA best-practices guide: [docs/best-practices-audit.md](docs/best-practices-audit.md).
+
 ## Features
 
 - **3-phase exercise program** with isometric holds, isotonic exercises, and pull-up progressions
